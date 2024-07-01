@@ -5,6 +5,7 @@ import (
 	"flag"
 	e "github.com/eqkez0r/gophermart/pkg/error"
 	"github.com/ilyakaznacheev/cleanenv"
+	"log"
 )
 
 type Config struct {
@@ -15,7 +16,7 @@ type Config struct {
 
 const (
 	defaultRunAddr           = "127.0.0.1:8880"
-	defaultAccrualSystemAddr = ""
+	defaultAccrualSystemAddr = "127.0.0.1:8080"
 )
 
 var (
@@ -23,17 +24,19 @@ var (
 )
 
 func NewConfig() (*Config, error) {
-	const op = "Initial config"
+	const op = "Initial config error: "
 
 	cfg := &Config{}
 	flag.StringVar(&cfg.RunAddress, "a", defaultRunAddr, "run address")
 	flag.StringVar(&cfg.DatabaseURI, "d", "", "database uri")
 	flag.StringVar(&cfg.AccrualSystemAddress, "r", defaultAccrualSystemAddr, "")
+	flag.Parse()
 
 	err := cleanenv.ReadEnv(cfg)
 	if err != nil {
 		return nil, e.Wrap(op, err)
 	}
+	log.Printf("config", cfg)
 	if cfg.DatabaseURI == "" {
 		return nil, e.Wrap(op, errEmptyDatabaseURI)
 	}

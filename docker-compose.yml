@@ -1,6 +1,4 @@
 services:
-
-
   postgresql:
     image: postgres:16-alpine
     container_name: gophermart-psql
@@ -13,8 +11,7 @@ services:
     volumes:
       - ./data:/var/lib/postgresql/data
     networks:
-      -gophermart_nw
-
+      - gophermart_nw
 
 networks:
   gophermart_nw:
