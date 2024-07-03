@@ -40,7 +40,7 @@ func New(
 	engine.Use(middleware.Logger(logger))
 	//handlers
 	authApi := engine.Group(APIUserRoute)
-	authApi.POST(handlers.RegisterHandlerPath, handlers.RegisterHandler(logger, s))
+	authApi.POST(handlers.RegisterHandlerPath, handlers.RegisterHandler(ctx, logger, s))
 	authApi.POST(handlers.AuthHandlerPath, handlers.AuthHandler(logger))
 
 	interactApi := engine.Group(APIUserRoute)

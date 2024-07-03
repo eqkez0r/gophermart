@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"github.com/eqkez0r/gophermart/internal/storage"
 	obj "github.com/eqkez0r/gophermart/pkg/objects"
 	"github.com/eqkez0r/gophermart/utils/retry"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -10,17 +9,17 @@ import (
 )
 
 const (
-	queryCreateUserTable = `CREATE TABLE Users(
-    id SERIAL PRIMARY KEY,
+	queryCreateUserTable = `CREATE TABLE users(
+    user_id SERIAL PRIMARY KEY,
     login VARCHAR(50) UNIQUE,
     password VARCHAR(128)          
 )`
 	queryCreateOrdersTable  = ``
 	queryCreateAccrualTable = ``
 
-	querySelectLastUserIndex = `SELECT id FROM Users ORDER BY id DESC LIMIT 1`
-	queryPutNewUser          = `INSERT INTO Users(id, login, password) VALUES $1, $2, $3`
-	queryGetUser             = `SELECT * FROM Users WHERE login = $1`
+	//queryLastIndex = `SELECT id FROM Users ORDER BY id DESC LIMIT 1`
+	queryNewUser = `INSERT INTO Users(login, password) VALUES $1, $2`
+	queryGetUser = `SELECT * FROM Users WHERE login = $1`
 )
 
 type PostgreSQLStorage struct {
@@ -32,7 +31,7 @@ func New(
 	ctx context.Context,
 	logger *zap.SugaredLogger,
 	uri string,
-) (storage.Storage, error) {
+) (*PostgreSQLStorage, error) {
 	const op = "Initial PostreSQL user storage error: "
 	pool, err := pgxpool.New(ctx, uri)
 	if err != nil {
@@ -59,12 +58,21 @@ func New(
 	}, nil
 }
 
-func (p PostgreSQLStorage) NewUser(user *obj.User) error {
-	//TODO implement me
-	panic("implement me")
+func (p *PostgreSQLStorage) NewUser(ctx context.Context, user *obj.User) error {
+	_, err := p.pool.Exec(ctx, queryNewUser, user.Login, user.Password)
+	if err != nil {
+		p.logger.Errorf("Database scan user: %s. %v", user.Login, err)
+		return err
+	}
+	return nil
 }
 
-func (p PostgreSQLStorage) GetUser(login string) (*obj.User, error) {
-	//TODO implement me
-	panic("implement me")
+func (p *PostgreSQLStorage) GetUser(ctx context.Context, login string) (*obj.User, error) {
+	row := p.pool.QueryRow(ctx, queryGetUser, login)
+	usr := &obj.User{}
+	if err := row.Scan(usr); err != nil {
+		p.logger.Errorf("Database scan user: %s. %v", login, err)
+		return nil, err
+	}
+	return usr, nil
 }

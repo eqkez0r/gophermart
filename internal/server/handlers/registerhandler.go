@@ -1,10 +1,11 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
-	"github.com/eqkez0r/gophermart/internal/storage"
 	e "github.com/eqkez0r/gophermart/pkg/error"
 	obj "github.com/eqkez0r/gophermart/pkg/objects"
+	"github.com/eqkez0r/gophermart/utils/hash"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"net/http"
@@ -14,9 +15,14 @@ const (
 	RegisterHandlerPath = "/register"
 )
 
+type RegisterUserProvider interface {
+	NewUser(context.Context, *obj.User) error
+}
+
 func RegisterHandler(
+	ctx context.Context,
 	logger *zap.SugaredLogger,
-	storage storage.Storage) gin.HandlerFunc {
+	storage RegisterUserProvider) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		const op = "Error in register handler: "
 		newUser := &obj.User{}
@@ -32,8 +38,13 @@ func RegisterHandler(
 			c.Status(http.StatusBadRequest)
 			return
 		}
-		//TODO:hash pass here
-		err = storage.NewUser(newUser)
+		newUser.Password, err = hash.HashPassword(newUser.Password)
+		if err != nil {
+			logger.Error(e.Wrap(op, err))
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+		err = storage.NewUser(ctx, newUser)
 		if err != nil {
 			//switch error
 			c.Status(http.StatusInternalServerError)

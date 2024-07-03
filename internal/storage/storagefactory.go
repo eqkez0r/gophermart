@@ -2,21 +2,26 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"github.com/eqkez0r/gophermart/internal/storage/postgres"
 	"go.uber.org/zap"
+)
+
+var (
+	ErrUnknownStorageType = errors.New("Unsupported storage type")
 )
 
 func NewStorage(
 	ctx context.Context,
 	logger *zap.SugaredLogger,
 	storagetype string,
-	settings ...string) Storage {
+	settings ...string) (Storage, error) {
 	switch storagetype {
-	case "postgrsql":
+	case "postgresql":
 		{
-			return postgres.New()
+			return postgres.New(ctx, logger, settings[0])
 		}
 	default:
-		return nil
+		return nil, ErrUnknownStorageType
 	}
 }

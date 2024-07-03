@@ -25,7 +25,11 @@ func main() {
 	if err != nil {
 		suggaredLogger.Fatal(err)
 	}
-	s := storage.NewStorage("postgresql")
+
+	s, err := storage.NewStorage(ctx, suggaredLogger, "postgresql", cfg.DatabaseURI)
+	if err != nil {
+		suggaredLogger.Fatal(err)
+	}
 
 	server, err := httpserver.New(ctx, cfg, suggaredLogger, s)
 	if err != nil {

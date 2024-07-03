@@ -1,8 +1,11 @@
 package storage
 
-import obj "github.com/eqkez0r/gophermart/pkg/objects"
+import (
+	"context"
+	obj "github.com/eqkez0r/gophermart/pkg/objects"
+)
 
 type Storage interface {
-	NewUser(*obj.User) error
-	GetUser(string) (*obj.User, error)
+	NewUser(context.Context, *obj.User) error
+	GetUser(context.Context, string) (*obj.User, error)
 }
