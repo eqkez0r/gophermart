@@ -1,8 +1,15 @@
 package handlers
 
 import (
+	"context"
+	"encoding/json"
+	"github.com/eqkez0r/gophermart/pkg/authinspector"
+	e "github.com/eqkez0r/gophermart/pkg/error"
+	obj "github.com/eqkez0r/gophermart/pkg/objects"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"net/http"
+	"time"
 )
 
 const (
@@ -10,10 +17,27 @@ const (
 )
 
 func AuthHandler(
+	ctx context.Context,
 	logger *zap.SugaredLogger,
+	insp *authinspector.AuthInspector,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		const op = "Error in auth handler: "
 
+		user := &obj.User{}
+		userInbytes := c.Param("Authorization")
+		err := json.Unmarshal([]byte(userInbytes), user)
+		if err != nil {
+			logger.Error(e.Wrap(op, err))
+			c.Status(http.StatusBadRequest)
+			return
+		}
+		err = insp.Auth(ctx, user, time.Now())
+		if err != nil {
+			logger.Error(e.Wrap(op, err))
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+		c.Status(http.StatusOK)
 	}
 }

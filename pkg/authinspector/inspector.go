@@ -1,8 +1,8 @@
 package authinspector
 
 import (
+	"context"
 	"errors"
-	"github.com/eqkez0r/gophermart/internal/storage"
 	e "github.com/eqkez0r/gophermart/pkg/error"
 	obj "github.com/eqkez0r/gophermart/pkg/objects"
 	"go.uber.org/zap"
@@ -19,30 +19,35 @@ var (
 	errInvalidPass    = errors.New("incorrect pass")
 )
 
+type GettingUserProvider interface {
+	GetUser(context.Context, string) (*obj.User, error)
+}
+
 type AuthInspector struct {
 	logger *zap.SugaredLogger
 
-	userstorage storage.Storage
-	m           sync.Mutex
-	authmap     map[string]time.Time
+	storage GettingUserProvider
+	m       sync.Mutex
+	authmap map[string]time.Time
 }
 
 func New(
 	logger *zap.SugaredLogger,
-	userstorage storage.Storage,
+	userstorage GettingUserProvider,
 ) *AuthInspector {
 
 	return &AuthInspector{
-		logger:      logger,
-		userstorage: userstorage,
-		m:           sync.Mutex{},
-		authmap:     make(map[string]time.Time),
+		logger:  logger,
+		storage: userstorage,
+		m:       sync.Mutex{},
+		authmap: make(map[string]time.Time),
 	}
 }
 
-func (AI *AuthInspector) Auth(user obj.User, authtime time.Time) error {
+func (ai *AuthInspector) Auth(ctx context.Context, user *obj.User, authtime time.Time) error {
 	const op = "Auth Inspector error: "
-	u, err := AI.userstorage.GetUser(user.Login)
+	ai.logger.Infof("Auth user: %v", user)
+	u, err := ai.storage.GetUser(ctx, user.Login)
 	if err != nil {
 		return e.Wrap(op, err)
 	}
@@ -53,20 +58,49 @@ func (AI *AuthInspector) Auth(user obj.User, authtime time.Time) error {
 	if u.Password != hashingPass {
 		return e.Wrap(op, errInvalidPass)
 	}
-	AI.authmap[user.Login] = authtime
+	ai.m.Lock()
+	ai.authmap[user.Login] = authtime
+	ai.m.Unlock()
 	return nil
 }
 
-func (AI *AuthInspector) CheckAuth() (bool, error) {
-
-	return false, nil
+func (ai *AuthInspector) CheckAuth(user *obj.User) bool {
+	ai.m.Lock()
+	_, ok := ai.authmap[user.Login]
+	defer ai.m.Unlock()
+	return ok
 }
 
-func (AI *AuthInspector) CheckInDatabase() (bool, error) {
-
-	return false, nil
+func (ai *AuthInspector) CheckInDatabase(login string) (bool, error) {
+	u, err := ai.storage.GetUser(context.Background(), login)
+	if err != nil {
+		return false, err
+	}
+	if u == nil {
+		return false, errUserIsNotExist
+	}
+	return true, nil
 }
 
-func (AI *AuthInspector) Observe() {
-
+func (ai *AuthInspector) Observe(ctx context.Context) {
+	ticker := time.NewTicker(TTL / 3)
+	for range ticker.C {
+		select {
+		case <-ctx.Done():
+			{
+				ai.logger.Info("auth inspector stopped")
+				return
+			}
+		default:
+			{
+				ai.m.Lock()
+				for k, v := range ai.authmap {
+					if time.Since(v) > TTL {
+						delete(ai.authmap, k)
+					}
+				}
+				ai.m.Unlock()
+			}
+		}
+	}
 }

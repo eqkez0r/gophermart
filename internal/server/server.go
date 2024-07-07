@@ -6,6 +6,7 @@ import (
 	"github.com/eqkez0r/gophermart/internal/server/handlers"
 	"github.com/eqkez0r/gophermart/internal/server/middleware"
 	"github.com/eqkez0r/gophermart/internal/storage"
+	"github.com/eqkez0r/gophermart/pkg/authinspector"
 	e "github.com/eqkez0r/gophermart/pkg/error"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -28,6 +29,7 @@ func New(
 	cfg *config.Config,
 	logger *zap.SugaredLogger,
 	s storage.Storage,
+	insp *authinspector.AuthInspector,
 ) (*HTTPServer, error) {
 	const op = "Initial server error"
 
@@ -40,11 +42,11 @@ func New(
 	engine.Use(middleware.Logger(logger))
 	//handlers
 	authApi := engine.Group(APIUserRoute)
-	authApi.POST(handlers.RegisterHandlerPath, handlers.RegisterHandler(ctx, logger, s))
-	authApi.POST(handlers.AuthHandlerPath, handlers.AuthHandler(logger))
+	authApi.POST(handlers.RegisterHandlerPath, handlers.RegisterHandler(ctx, logger, s, insp))
+	authApi.POST(handlers.AuthHandlerPath, handlers.AuthHandler(ctx, logger, insp))
 
 	interactApi := engine.Group(APIUserRoute)
-	interactApi.Use()
+	interactApi.Use(middleware.Logger(logger), middleware.Auth(logger, insp))
 	interactApi.GET("")
 
 	server := &HTTPServer{
@@ -64,10 +66,12 @@ func (s *HTTPServer) Run(ctx context.Context) {
 	const op = "Server run error: "
 
 	go func() {
+		s.logger.Infof("Server was started on %s", s.cfg.RunAddress)
 		if err := s.server.ListenAndServe(); err != nil {
 			s.logger.Error(e.Wrap(op, err))
 		}
 	}()
+
 	<-ctx.Done()
 	s.GracefulShutdown(ctx)
 }

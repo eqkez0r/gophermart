@@ -10,7 +10,7 @@ services:
       - POSTGRES_PASSWORD=postgres
       - PGDATA=/var/lib/postgresql/data
     ports:
-      - "127.0.0.1:5555:5555"
+      - "127.0.0.1:5432:5432"
     volumes:
       - ./data:/var/lib/postgresql/data
     networks:
@@ -29,4 +29,4 @@ services:
 
 networks:
   ns:
-    -driver: bridge
+#    - driver: bridge

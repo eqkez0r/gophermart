@@ -8,4 +8,6 @@ import (
 type Storage interface {
 	NewUser(context.Context, *obj.User) error
 	GetUser(context.Context, string) (*obj.User, error)
+	NewOrder(context.Context, *obj.Order) error
+	GetOrder(context.Context, string) (*obj.Order, error)
 }
