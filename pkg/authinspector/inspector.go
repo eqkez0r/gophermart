@@ -15,8 +15,8 @@ const (
 )
 
 var (
-	errUserIsNotExist = errors.New("user is not exist")
-	errInvalidPass    = errors.New("incorrect pass")
+	ErrUserIsNotExist = errors.New("user is not exist")
+	ErrInvalidPass    = errors.New("incorrect pass")
 )
 
 type GettingUserProvider interface {
@@ -28,7 +28,7 @@ type AuthInspector struct {
 
 	storage GettingUserProvider
 	m       sync.Mutex
-	authmap map[string]time.Time
+	authmap map[string]string
 }
 
 func New(
@@ -40,11 +40,11 @@ func New(
 		logger:  logger,
 		storage: userstorage,
 		m:       sync.Mutex{},
-		authmap: make(map[string]time.Time),
+		authmap: make(map[string]string),
 	}
 }
 
-func (ai *AuthInspector) Auth(ctx context.Context, user *obj.User, authtime time.Time) error {
+func (ai *AuthInspector) Auth(ctx context.Context, user *obj.User, authtime string) error {
 	const op = "Auth Inspector error: "
 	ai.logger.Infof("Auth user: %v", user)
 	u, err := ai.storage.GetUser(ctx, user.Login)
@@ -52,15 +52,16 @@ func (ai *AuthInspector) Auth(ctx context.Context, user *obj.User, authtime time
 		return e.Wrap(op, err)
 	}
 	if u == nil {
-		return e.Wrap(op, errUserIsNotExist)
+		return e.Wrap(op, ErrUserIsNotExist)
 	}
-	hashingPass := user.Password //TODO: CHECK HASHING PASS
+	hashingPass := user.Password
 	if u.Password != hashingPass {
-		return e.Wrap(op, errInvalidPass)
+		return e.Wrap(op, ErrInvalidPass)
 	}
 	ai.m.Lock()
 	ai.authmap[user.Login] = authtime
 	ai.m.Unlock()
+	ai.logger.Infof("User %s succesfull authetithicated at %v", user.Login, authtime)
 	return nil
 }
 
@@ -77,7 +78,7 @@ func (ai *AuthInspector) CheckInDatabase(login string) (bool, error) {
 		return false, err
 	}
 	if u == nil {
-		return false, errUserIsNotExist
+		return false, ErrUserIsNotExist
 	}
 	return true, nil
 }
@@ -95,7 +96,11 @@ func (ai *AuthInspector) Observe(ctx context.Context) {
 			{
 				ai.m.Lock()
 				for k, v := range ai.authmap {
-					if time.Since(v) > TTL {
+					t, err := time.Parse(time.RFC3339, v)
+					if err != nil {
+						ai.logger.Warnf("Error parsing time: %v", err)
+					}
+					if time.Since(t) > TTL {
 						delete(ai.authmap, k)
 					}
 				}

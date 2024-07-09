@@ -47,7 +47,7 @@ func New(
 
 	interactApi := engine.Group(APIUserRoute)
 	interactApi.Use(middleware.Logger(logger), middleware.Auth(logger, insp))
-	interactApi.GET("")
+	interactApi.POST(handlers.NewOrderHandlerPath, handlers.NewOrderHandler(ctx, logger, s))
 
 	server := &HTTPServer{
 		server: &http.Server{

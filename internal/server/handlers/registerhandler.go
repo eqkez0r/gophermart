@@ -3,12 +3,14 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/eqkez0r/gophermart/pkg/authinspector"
 	e "github.com/eqkez0r/gophermart/pkg/error"
 	obj "github.com/eqkez0r/gophermart/pkg/objects"
 	"github.com/eqkez0r/gophermart/utils/hash"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.uber.org/zap"
 	"net/http"
 	"time"
@@ -16,6 +18,10 @@ import (
 
 const (
 	RegisterHandlerPath = "/register"
+)
+
+var (
+	errInvalidFormat = errors.New("invalid format request")
 )
 
 type RegisterUserProvider interface {
@@ -31,14 +37,17 @@ func RegisterHandler(
 	return func(c *gin.Context) {
 		const op = "Error in register handler: "
 		newUser := &obj.User{}
-		userInbytes := c.Param("Authorization")
-		err := json.Unmarshal([]byte(userInbytes), newUser)
-		if err != nil {
-			logger.Error(e.Wrap(op, err))
+		if c.ContentType() != "application/json" {
+			logger.Error(e.Wrap(op, errInvalidFormat))
 			c.Status(http.StatusBadRequest)
 			return
 		}
-		logger.Infof("user %v", newUser)
+		err := c.BindJSON(newUser)
+		if err != nil {
+			logger.Error(e.Wrap(op, err))
+			c.Status(http.StatusInternalServerError)
+			return
+		}
 		if newUser.Login == "" || newUser.Password == "" {
 			logger.Error(e.Wrap(op, fmt.Errorf("empty field")))
 			c.Status(http.StatusBadRequest)
@@ -52,18 +61,21 @@ func RegisterHandler(
 		}
 		err = storage.NewUser(ctx, newUser)
 		if err != nil {
-			//switch error
 			logger.Error(e.Wrap(op, err))
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) {
+				logger.Info(err, pgErr)
+				if pgErr.Code == "23505" {
+					c.Status(http.StatusConflict)
+					return
+				}
+			}
 			c.Status(http.StatusInternalServerError)
 			return
 		}
-		parseT, err := time.Parse(time.RFC3339, time.Now().String())
-		if err != nil {
-			logger.Error(e.Wrap(op, err))
-			c.Status(http.StatusInternalServerError)
-			return
-		}
-		err = insp.Auth(ctx, newUser, parseT)
+		t := time.Now()
+		formattedTime := t.Format(time.RFC3339)
+		err = insp.Auth(ctx, newUser, formattedTime)
 		if err != nil {
 			c.Status(http.StatusInternalServerError)
 			return

@@ -18,7 +18,6 @@ const (
 	CREATE TABLE orders(
 		order_id SERIAL PRIMARY KEY,
 		order_customer INTEGER REFERENCES users(user_id),
-		order_sum DOUBLE PRECISION,
 		order_accrual DOUBLE PRECISION,
 		order_time timestamp,
 		order_status INTEGER
@@ -29,11 +28,10 @@ const (
 	queryGetUser = `SELECT * FROM users WHERE login = $1`
 
 	queryNewOrder = `INSERT INTO orders(order_customer,
-                   order_sum,
                    order_time,
-                   order_status) VALUES ($1,$2,$3,
+                   order_status) VALUES ($1,$2,
                                      (
-                                     	CASE $4
+                                     	CASE $3
                                      		WHEN 'NEW' THEN 0
                                      		WHEN 'PROCESSING' THEN 1
                                      		WHEN 'INVALID' THEN 2
@@ -82,11 +80,13 @@ func New(
 	})
 
 	return &PostgreSQLStorage{
+		pool:   pool,
 		logger: logger,
 	}, nil
 }
 
 func (p *PostgreSQLStorage) NewUser(ctx context.Context, user *obj.User) error {
+	p.logger.Infof("user data %v", user)
 	_, err := p.pool.Exec(ctx, queryNewUser, user.Login, user.Password)
 	if err != nil {
 		p.logger.Errorf("Database scan user: %s. %v", user.Login, err)
@@ -98,14 +98,14 @@ func (p *PostgreSQLStorage) NewUser(ctx context.Context, user *obj.User) error {
 func (p *PostgreSQLStorage) GetUser(ctx context.Context, login string) (*obj.User, error) {
 	row := p.pool.QueryRow(ctx, queryGetUser, login)
 	usr := &obj.User{}
-	if err := row.Scan(usr); err != nil {
+	if err := row.Scan(&usr.UserID, &usr.Login, &usr.Password); err != nil {
 		p.logger.Errorf("Database scan user: %s. %v", login, err)
 		return nil, err
 	}
 	return usr, nil
 }
 
-func (p *PostgreSQLStorage) NewOrder(ctx context.Context, order *obj.Order) error {
+func (p *PostgreSQLStorage) NewOrder(ctx context.Context, number uint64) error {
 	return nil
 }
 

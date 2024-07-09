@@ -32,7 +32,9 @@ func AuthHandler(
 			c.Status(http.StatusBadRequest)
 			return
 		}
-		err = insp.Auth(ctx, user, time.Now())
+		t := time.Now()
+		formattedTime := t.Format(time.RFC3339)
+		err = insp.Auth(ctx, user, formattedTime)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)
