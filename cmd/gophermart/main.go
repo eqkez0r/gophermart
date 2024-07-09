@@ -5,7 +5,6 @@ import (
 	"github.com/eqkez0r/gophermart/internal/config"
 	httpserver "github.com/eqkez0r/gophermart/internal/server"
 	"github.com/eqkez0r/gophermart/internal/storage"
-	"github.com/eqkez0r/gophermart/pkg/authinspector"
 	"go.uber.org/zap"
 	"log"
 	"os/signal"
@@ -32,10 +31,9 @@ func main() {
 		suggaredLogger.Fatal(err)
 	}
 
-	ins := authinspector.New(suggaredLogger, s)
-	go ins.Observe(ctx)
+	defer s.Close()
 
-	server, err := httpserver.New(ctx, cfg, suggaredLogger, s, ins)
+	server, err := httpserver.New(ctx, cfg, suggaredLogger, s)
 	if err != nil {
 		suggaredLogger.Fatal(err)
 	}

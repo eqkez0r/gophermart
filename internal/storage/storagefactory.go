@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	ErrUnknownStorageType = errors.New("Unsupported storage type")
+	ErrUnknownStorageType = errors.New("unsupported storage type")
 )
 
 func NewStorage(

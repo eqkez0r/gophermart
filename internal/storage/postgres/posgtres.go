@@ -12,7 +12,7 @@ const (
 	queryCreateUserTable = `CREATE TABLE users(
     user_id SERIAL PRIMARY KEY,
     login VARCHAR(50) UNIQUE,
-    password VARCHAR(128)          
+    password VARCHAR(128)     
 )`
 	queryCreateOrdersTable = `
 	CREATE TABLE orders(
@@ -20,24 +20,15 @@ const (
 		order_customer INTEGER REFERENCES users(user_id),
 		order_accrual DOUBLE PRECISION,
 		order_time timestamp,
-		order_status INTEGER
+		order_status VARCHAR(10)
 	)`
 
 	//queryLastIndex = `SELECT id FROM Users ORDER BY id DESC LIMIT 1`
-	queryNewUser = `INSERT INTO users(login, password) VALUES ($1, $2)`
-	queryGetUser = `SELECT * FROM users WHERE login = $1`
+	queryNewUser      = `INSERT INTO users(login, password) VALUES ($1, $2)`
+	queryGetUser      = `SELECT * FROM users WHERE login = $1`
+	queryGetOnlyLogin = `SELECT login FROM users WHERE login = $1`
 
-	queryNewOrder = `INSERT INTO orders(order_customer,
-                   order_time,
-                   order_status) VALUES ($1,$2,
-                                     (
-                                     	CASE $3
-                                     		WHEN 'NEW' THEN 0
-                                     		WHEN 'PROCESSING' THEN 1
-                                     		WHEN 'INVALID' THEN 2
-                                     		WHEN 'PROCESSED' THEN 3
-                                         END
-                                     ))`
+	queryNewOrder          = `INSERT INTO orders(order_customer, order_time, order_status) VALUES ($1,$2,$3)`
 	queryGetOrder          = `SELECT * FROM orders WHERE order_id = $1`
 	queryChangeOrderStatus = `UPDATE orders SET order_status = $1 WHERE order_id = $2`
 	queryGetNotFinished    = `SELECT * FROM orders WHERE order_status = 'NEW' OR order_status = 'PROCESSING'`
@@ -115,4 +106,13 @@ func (p *PostgreSQLStorage) GetOrder(ctx context.Context, orderID string) (*obj.
 
 func (p *PostgreSQLStorage) Close() {
 	p.pool.Close()
+}
+
+func (p *PostgreSQLStorage) IsUserExist(ctx context.Context, login string) (bool, error) {
+	row := p.pool.QueryRow(ctx, queryGetOnlyLogin, login)
+	var dblogin string
+	if err := row.Scan(&dblogin); err != nil {
+		return false, err
+	}
+	return true, nil
 }

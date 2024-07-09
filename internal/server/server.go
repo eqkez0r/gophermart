@@ -6,7 +6,6 @@ import (
 	"github.com/eqkez0r/gophermart/internal/server/handlers"
 	"github.com/eqkez0r/gophermart/internal/server/middleware"
 	"github.com/eqkez0r/gophermart/internal/storage"
-	"github.com/eqkez0r/gophermart/pkg/authinspector"
 	e "github.com/eqkez0r/gophermart/pkg/error"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -29,7 +28,6 @@ func New(
 	cfg *config.Config,
 	logger *zap.SugaredLogger,
 	s storage.Storage,
-	insp *authinspector.AuthInspector,
 ) (*HTTPServer, error) {
 	const op = "Initial server error"
 
@@ -41,13 +39,13 @@ func New(
 	//middleware
 	engine.Use(middleware.Logger(logger))
 	//handlers
-	authApi := engine.Group(APIUserRoute)
-	authApi.POST(handlers.RegisterHandlerPath, handlers.RegisterHandler(ctx, logger, s, insp))
-	authApi.POST(handlers.AuthHandlerPath, handlers.AuthHandler(ctx, logger, insp))
+	authAPI := engine.Group(APIUserRoute)
+	authAPI.POST(handlers.RegisterHandlerPath, handlers.RegisterHandler(ctx, logger, s))
+	authAPI.POST(handlers.AuthHandlerPath, handlers.AuthHandler(ctx, logger, s))
 
-	interactApi := engine.Group(APIUserRoute)
-	interactApi.Use(middleware.Logger(logger), middleware.Auth(logger, insp))
-	interactApi.POST(handlers.NewOrderHandlerPath, handlers.NewOrderHandler(ctx, logger, s))
+	interactAPI := engine.Group(APIUserRoute)
+	interactAPI.Use(middleware.Logger(logger), middleware.Auth(ctx, logger, s), middleware.Gzip(logger))
+	interactAPI.POST(handlers.NewOrderHandlerPath, handlers.NewOrderHandler(ctx, logger, s))
 
 	server := &HTTPServer{
 		server: &http.Server{

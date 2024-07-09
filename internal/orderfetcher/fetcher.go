@@ -6,6 +6,11 @@ import (
 	"go.uber.org/zap"
 )
 
+// pool order
+// 429
+// time.sleep
+// try again this order
+
 type OrdersProvider interface {
 	GetUnfinishedOrders(ctx context.Context) error
 }
@@ -35,7 +40,9 @@ func (or *OrderFetcher) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		default:
-
+			{
+			
+			}
 		}
 	}
 }

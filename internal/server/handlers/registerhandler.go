@@ -2,18 +2,16 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/eqkez0r/gophermart/pkg/authinspector"
 	e "github.com/eqkez0r/gophermart/pkg/error"
+	"github.com/eqkez0r/gophermart/pkg/jwt"
 	obj "github.com/eqkez0r/gophermart/pkg/objects"
 	"github.com/eqkez0r/gophermart/utils/hash"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgconn"
 	"go.uber.org/zap"
 	"net/http"
-	"time"
 )
 
 const (
@@ -24,15 +22,14 @@ var (
 	errInvalidFormat = errors.New("invalid format request")
 )
 
-type RegisterUserProvider interface {
+type NewUserProvider interface {
 	NewUser(context.Context, *obj.User) error
 }
 
 func RegisterHandler(
 	ctx context.Context,
 	logger *zap.SugaredLogger,
-	storage RegisterUserProvider,
-	insp *authinspector.AuthInspector,
+	storage NewUserProvider,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		const op = "Error in register handler: "
@@ -66,6 +63,7 @@ func RegisterHandler(
 			if errors.As(err, &pgErr) {
 				logger.Info(err, pgErr)
 				if pgErr.Code == "23505" {
+					logger.Error(e.Wrap(op, pgErr))
 					c.Status(http.StatusConflict)
 					return
 				}
@@ -73,20 +71,14 @@ func RegisterHandler(
 			c.Status(http.StatusInternalServerError)
 			return
 		}
-		t := time.Now()
-		formattedTime := t.Format(time.RFC3339)
-		err = insp.Auth(ctx, newUser, formattedTime)
-		if err != nil {
-			c.Status(http.StatusInternalServerError)
-			return
-		}
-		b, err := json.Marshal(newUser)
+		token, err := jwt.CreateJWT(newUser.Login)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)
 			return
 		}
-		c.Header("Authorization", string(b))
+
+		c.Header("Authorization", token)
 		c.Status(http.StatusOK)
 	}
 }

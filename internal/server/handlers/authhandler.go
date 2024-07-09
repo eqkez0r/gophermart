@@ -2,44 +2,79 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
-	"github.com/eqkez0r/gophermart/pkg/authinspector"
+	"fmt"
 	e "github.com/eqkez0r/gophermart/pkg/error"
+	"github.com/eqkez0r/gophermart/pkg/jwt"
 	obj "github.com/eqkez0r/gophermart/pkg/objects"
+	"github.com/eqkez0r/gophermart/utils/hash"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"net/http"
-	"time"
 )
 
 const (
 	AuthHandlerPath = "/login/"
 )
 
+type GetUserProvider interface {
+	GetUser(context.Context, string) (*obj.User, error)
+}
+
 func AuthHandler(
 	ctx context.Context,
 	logger *zap.SugaredLogger,
-	insp *authinspector.AuthInspector,
+	storage GetUserProvider,
+
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		const op = "Error in auth handler: "
 
-		user := &obj.User{}
-		userInbytes := c.Param("Authorization")
-		err := json.Unmarshal([]byte(userInbytes), user)
-		if err != nil {
-			logger.Error(e.Wrap(op, err))
+		newUser := &obj.User{}
+		if c.ContentType() != "application/json" {
+			logger.Error(e.Wrap(op, errInvalidFormat))
 			c.Status(http.StatusBadRequest)
 			return
 		}
-		t := time.Now()
-		formattedTime := t.Format(time.RFC3339)
-		err = insp.Auth(ctx, user, formattedTime)
+		err := c.BindJSON(newUser)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)
 			return
 		}
+		if newUser.Login == "" || newUser.Password == "" {
+			logger.Error(e.Wrap(op, fmt.Errorf("empty field")))
+			c.Status(http.StatusBadRequest)
+			return
+		}
+		newUser.Password, err = hash.HashPassword(newUser.Password)
+		if err != nil {
+			logger.Error(e.Wrap(op, err))
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+
+		user, err := storage.GetUser(ctx, newUser.Login)
+		if err != nil {
+			logger.Error(e.Wrap(op, err))
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+
+		if user.Password != newUser.Password {
+			logger.Error(e.Wrap(op, fmt.Errorf("invalid password")))
+			c.Status(http.StatusUnauthorized)
+			return
+		}
+
+		token, err := jwt.CreateJWT(newUser.Login)
+		if err != nil {
+			logger.Error(e.Wrap(op, err))
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+
+		c.Header("Authorization", token)
+
 		c.Status(http.StatusOK)
 	}
 }

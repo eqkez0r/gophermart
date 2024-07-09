@@ -5,7 +5,6 @@ import (
 	"flag"
 	e "github.com/eqkez0r/gophermart/pkg/error"
 	"github.com/ilyakaznacheev/cleanenv"
-	"log"
 )
 
 type Config struct {
@@ -36,7 +35,6 @@ func NewConfig() (*Config, error) {
 	if err != nil {
 		return nil, e.Wrap(op, err)
 	}
-	log.Printf("config", cfg)
 	if cfg.DatabaseURI == "" {
 		return nil, e.Wrap(op, errEmptyDatabaseURI)
 	}
