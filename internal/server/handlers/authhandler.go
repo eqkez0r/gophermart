@@ -9,6 +9,7 @@ import (
 	"github.com/eqkez0r/gophermart/utils/hash"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"golang.org/x/crypto/bcrypt"
 	"net/http"
 )
 
@@ -60,7 +61,7 @@ func AuthHandler(
 			return
 		}
 
-		if user.Password != newUser.Password {
+		if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(newUser.Password)) != nil {
 			logger.Error(e.Wrap(op, fmt.Errorf("invalid password")))
 			c.Status(http.StatusUnauthorized)
 			return

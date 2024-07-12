@@ -49,7 +49,7 @@ func Auth(
 			return
 		}
 
-		if time.Now().After(ttl) {
+		if time.Now().Before(ttl) {
 			logger.Error(e.Wrap(op, fmt.Errorf("token expired")))
 			c.Status(http.StatusUnauthorized)
 			return

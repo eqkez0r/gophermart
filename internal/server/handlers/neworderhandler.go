@@ -30,6 +30,8 @@ func NewOrderHandler(
 			c.Status(http.StatusInternalServerError)
 			return
 		}
-		log.Println(body)
+
+		log.Println(string(body))
+
 	}
 }
