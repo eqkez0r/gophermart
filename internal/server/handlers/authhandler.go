@@ -6,7 +6,6 @@ import (
 	e "github.com/eqkez0r/gophermart/pkg/error"
 	"github.com/eqkez0r/gophermart/pkg/jwt"
 	obj "github.com/eqkez0r/gophermart/pkg/objects"
-	"github.com/eqkez0r/gophermart/utils/hash"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
@@ -30,44 +29,38 @@ func AuthHandler(
 	return func(c *gin.Context) {
 		const op = "Error in auth handler: "
 
-		newUser := &obj.User{}
+		u := &obj.User{}
 		if c.ContentType() != "application/json" {
 			logger.Error(e.Wrap(op, errInvalidFormat))
 			c.Status(http.StatusBadRequest)
 			return
 		}
-		err := c.BindJSON(newUser)
+		err := c.BindJSON(u)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)
 			return
 		}
-		if newUser.Login == "" || newUser.Password == "" {
+		if u.Login == "" || u.Password == "" {
 			logger.Error(e.Wrap(op, fmt.Errorf("empty field")))
 			c.Status(http.StatusBadRequest)
 			return
 		}
-		newUser.Password, err = hash.HashPassword(newUser.Password)
+
+		user, err := storage.GetUser(ctx, u.Login)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)
 			return
 		}
 
-		user, err := storage.GetUser(ctx, newUser.Login)
-		if err != nil {
-			logger.Error(e.Wrap(op, err))
-			c.Status(http.StatusInternalServerError)
-			return
-		}
-
-		if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(newUser.Password)) != nil {
+		if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(u.Password)) != nil {
 			logger.Error(e.Wrap(op, fmt.Errorf("invalid password")))
 			c.Status(http.StatusUnauthorized)
 			return
 		}
 
-		token, err := jwt.CreateJWT(newUser.Login)
+		token, err := jwt.CreateJWT(u.Login, u.UserID)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)

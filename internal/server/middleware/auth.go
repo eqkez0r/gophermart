@@ -22,14 +22,14 @@ func Auth(
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		const op = "Auth middleware error: "
-		token := c.Param("Authorization")
+		token := c.Request.Header.Get("Authorization")
 		if token == "" {
 			logger.Error(e.Wrap(op, fmt.Errorf("empty field")))
 			c.Status(http.StatusBadRequest)
 			return
 		}
 
-		login, ttl, err := jwt.JWTPayload(token)
+		login, _, ttl, err := jwt.JWTPayload(token)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)
@@ -49,7 +49,7 @@ func Auth(
 			return
 		}
 
-		if time.Now().Before(ttl) {
+		if time.Now().After(ttl) {
 			logger.Error(e.Wrap(op, fmt.Errorf("token expired")))
 			c.Status(http.StatusUnauthorized)
 			return

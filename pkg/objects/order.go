@@ -3,10 +3,10 @@ package objects
 import "time"
 
 const (
-	New        = "NEW"
-	Processing = "PROCESSING"
-	Invalid    = "INVALID"   //End value
-	Processed  = "PROCESSED" //End value
+	OrderStatusNew        = "NEW"
+	OrderStatusProcessing = "PROCESSING"
+	OrderStatusInvalid    = "INVALID"   //End value
+	OrderStatusProcessed  = "PROCESSED" //End value
 )
 
 type Order struct {

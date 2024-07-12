@@ -24,6 +24,7 @@ var (
 
 type NewUserProvider interface {
 	NewUser(context.Context, *obj.User) error
+	GetLastUserID(context.Context) (uint64, error)
 }
 
 func RegisterHandler(
@@ -71,7 +72,15 @@ func RegisterHandler(
 			c.Status(http.StatusInternalServerError)
 			return
 		}
-		token, err := jwt.CreateJWT(newUser.Login)
+
+		userid, err := storage.GetLastUserID(ctx)
+		if err != nil {
+			logger.Error(e.Wrap(op, err))
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+
+		token, err := jwt.CreateJWT(newUser.Login, userid)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)

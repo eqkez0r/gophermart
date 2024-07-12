@@ -17,15 +17,17 @@ var (
 
 type Claims struct {
 	jwt.RegisteredClaims
-	Login string
+	UserID uint64
+	Login  string
 }
 
-func CreateJWT(login string) (string, error) {
+func CreateJWT(login string, userID uint64) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenexp)),
 		},
-		Login: login,
+		Login:  login,
+		UserID: userID,
 	})
 	tokenString, err := token.SignedString([]byte(key))
 	if err != nil {
@@ -34,7 +36,7 @@ func CreateJWT(login string) (string, error) {
 	return tokenString, nil
 }
 
-func JWTPayload(tokenString string) (string, time.Time, error) {
+func JWTPayload(tokenString string) (string, uint64, time.Time, error) {
 	claims := &Claims{}
 
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
@@ -42,12 +44,12 @@ func JWTPayload(tokenString string) (string, time.Time, error) {
 	})
 
 	if err != nil {
-		return "", time.Time{}, err
+		return "", 0, time.Time{}, err
 	}
 
 	if !token.Valid {
-		return "", time.Time{}, ErrInvalidToken
+		return "", 0, time.Time{}, ErrInvalidToken
 	}
 
-	return claims.Login, claims.ExpiresAt.Time, nil
+	return claims.Login, claims.UserID, claims.ExpiresAt.Time, nil
 }

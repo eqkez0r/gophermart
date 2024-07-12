@@ -1,6 +1,6 @@
 package luhn
 
-func CalculateLuhn(number int) int {
+func CalculateLuhn(number uint64) uint64 {
 	checkNumber := checksum(number)
 
 	if checkNumber == 0 {
@@ -9,12 +9,12 @@ func CalculateLuhn(number int) int {
 	return 10 - checkNumber
 }
 
-func Valid(number int) bool {
+func Valid(number uint64) bool {
 	return (number%10+checksum(number/10))%10 == 0
 }
 
-func checksum(number int) int {
-	var luhn int
+func checksum(number uint64) uint64 {
+	var luhn uint64
 
 	for i := 0; number > 0; i++ {
 		cur := number % 10
