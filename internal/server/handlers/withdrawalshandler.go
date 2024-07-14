@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"errors"
 	e "github.com/eqkez0r/gophermart/pkg/error"
 	"github.com/eqkez0r/gophermart/pkg/jwt"
 	obj "github.com/eqkez0r/gophermart/pkg/objects"
@@ -12,20 +11,20 @@ import (
 )
 
 const (
-	OrderListHandlerPath = "/orders"
+	WithdrawalsHandlerPath = "/withdrawals"
 )
 
-type OrderListProvider interface {
-	GetOrdersList(ctx context.Context, userID uint64) ([]*obj.Order, error)
+type WithdrawalsProvider interface {
+	Withdrawals(context.Context, uint64) ([]*obj.Withdraw, error)
 }
 
-func OrderListHandler(
+func WithdrawalsHandler(
 	ctx context.Context,
 	logger *zap.SugaredLogger,
-	store OrderListProvider,
+	store WithdrawalsProvider,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		const op = "Error in new order list handler: "
+		const op = "Error in withdrawals handler: "
 
 		token := c.Request.Header.Get("Authorization")
 
@@ -36,19 +35,17 @@ func OrderListHandler(
 			return
 		}
 
-		orders, err := store.GetOrdersList(ctx, userID)
+		withdrawals, err := store.Withdrawals(ctx, userID)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)
 			return
 		}
-
-		if len(orders) == 0 {
-			logger.Error(e.Wrap(op, errors.New("no orders found")))
+		if len(withdrawals) == 0 {
+			logger.Infof("No Withdrawals for user %d", userID)
 			c.Status(http.StatusNoContent)
 			return
 		}
-
-		c.JSON(http.StatusOK, orders)
+		c.JSON(http.StatusOK, withdrawals)
 	}
 }

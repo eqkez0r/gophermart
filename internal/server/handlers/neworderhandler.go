@@ -34,16 +34,25 @@ func NewOrderHandler(
 	return func(c *gin.Context) {
 		const op = "Error in new order handler: "
 
+		ct := c.ContentType()
+
 		body, err := io.ReadAll(c.Request.Body)
 		if err != nil {
+			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)
+			return
+		}
+
+		if ct != "text/plain" && len(body) == 0 {
+			logger.Error(e.Wrap(op, err))
+			c.Status(http.StatusBadRequest)
 			return
 		}
 
 		number, err := strconv.ParseUint(string(body), 10, 64)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
-			c.Status(http.StatusInternalServerError)
+			c.Status(http.StatusUnprocessableEntity)
 			return
 		}
 

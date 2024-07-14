@@ -20,7 +20,8 @@ type HTTPServer struct {
 }
 
 const (
-	APIUserRoute = "/api/user"
+	APIUserRoute    = "/api/user"
+	APIBalanceRoute = "/balance"
 )
 
 func New(
@@ -43,9 +44,15 @@ func New(
 	authAPI.POST(handlers.RegisterHandlerPath, handlers.RegisterHandler(ctx, logger, s))
 	authAPI.POST(handlers.AuthHandlerPath, handlers.AuthHandler(ctx, logger, s))
 
-	interactAPI := engine.Group(APIUserRoute)
-	interactAPI.Use(middleware.Logger(logger), middleware.Auth(ctx, logger, s), middleware.Gzip(logger))
-	interactAPI.POST(handlers.NewOrderHandlerPath, handlers.NewOrderHandler(ctx, logger, s))
+	userAPI := engine.Group(APIUserRoute)
+	userAPI.Use(middleware.Logger(logger), middleware.Auth(ctx, logger, s), middleware.Gzip(logger))
+	userAPI.POST(handlers.NewOrderHandlerPath, handlers.NewOrderHandler(ctx, logger, s))
+	userAPI.GET(handlers.OrderListHandlerPath, handlers.OrderListHandler(ctx, logger, s))
+	userAPI.GET(handlers.WithdrawalsHandlerPath, handlers.WithdrawalsHandler(ctx, logger, s))
+
+	balanceAPI := userAPI.Group(APIBalanceRoute)
+	balanceAPI.GET(handlers.BalanceHandlerPath, handlers.BalanceHandler(ctx, logger, s))
+	balanceAPI.POST(handlers.WithdrawHandlerPath, handlers.WithdrawHandler(ctx, logger, s))
 
 	server := &HTTPServer{
 		server: &http.Server{
