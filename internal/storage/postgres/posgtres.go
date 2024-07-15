@@ -3,7 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
-	"github.com/eqkez0r/gophermart/internal/storage"
+	e "github.com/eqkez0r/gophermart/pkg/error"
 	obj "github.com/eqkez0r/gophermart/pkg/objects"
 	"github.com/eqkez0r/gophermart/utils/retry"
 	"github.com/jackc/pgx/v5"
@@ -207,7 +207,7 @@ func (p *PostgreSQLStorage) NewWithdraw(ctx context.Context, userID, orderID uin
 	err := p.pool.QueryRow(ctx, queryGetOrder, orderID).Scan(&order)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return storage.ErrIsOrderIsNotExist
+			return e.ErrIsOrderIsNotExist
 		}
 		return err
 	}
@@ -220,7 +220,7 @@ func (p *PostgreSQLStorage) NewWithdraw(ctx context.Context, userID, orderID uin
 
 	if balance.Balance < withdraw {
 		p.logger.Errorf("Not enough balance for user: %s.", userID)
-		return storage.ErrBalanceIsNotEnough
+		return e.ErrBalanceIsNotEnough
 	}
 
 	p.logger.Infof("Withdrawing user: %s. Before balance: %d, NewWithdraw: %d.",

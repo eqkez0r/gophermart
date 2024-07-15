@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/eqkez0r/gophermart/internal/storage"
 	e "github.com/eqkez0r/gophermart/pkg/error"
 	"github.com/eqkez0r/gophermart/pkg/jwt"
 	obj "github.com/eqkez0r/gophermart/pkg/objects"
@@ -72,11 +71,11 @@ func WithdrawHandler(
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			switch {
-			case errors.Is(err, storage.ErrIsOrderIsNotExist):
+			case errors.Is(err, e.ErrIsOrderIsNotExist):
 				{
 					c.Status(http.StatusUnprocessableEntity)
 				}
-			case errors.Is(err, storage.ErrBalanceIsNotEnough):
+			case errors.Is(err, e.ErrBalanceIsNotEnough):
 				{
 					c.Status(http.StatusPaymentRequired)
 				}
