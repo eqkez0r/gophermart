@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
+	"log"
 	"time"
 )
 
@@ -31,13 +32,12 @@ const (
 	queryCreateWithdrawsTable = `
 	CREATE TABLE withdrawals(
 	    order_customer INTEGER REFERENCES users(user_id) ON DELETE CASCADE NOT NULL,
-	    order_number BIGINT REFERENCES orders(order_number) ON DELETE CASCADE NOT NULL,
-	    sum DOUBLE PRECISION REFERENCES orders(order_accrual) ON DELETE CASCADE NOT NULL,
+	    order_number BIGINT REFERENCES orders(order_number),
+	    sum DOUBLE PRECISION REFERENCES orders(order_accrual),
 	    withdraw_time TIMESTAMP WITH TIME ZONE NOT NULL
-	)
-`
+	)`
 
-	queryNewUser       = `INSERT INTO users(login, password, accrual_balance, withdraw) VALUES ($1, $2, 0, 0)`
+	queryNewUser       = `INSERT INTO users(login, password, accrual_balance, withdrawal_balance) VALUES ($1, $2, 0, 0)`
 	queryGetUser       = `SELECT * FROM users WHERE login = $1`
 	queryGetOnlyLogin  = `SELECT login FROM users WHERE login = $1`
 	queryGetLastUserID = "SELECT user_id FROM users ORDER BY user_id DESC LIMIT 1"
@@ -51,7 +51,7 @@ const (
                    order_status) VALUES ($1,$2,$3,$4)`
 	queryGetOrderList      = `SELECT * FROM orders WHERE order_customer = $1`
 	queryChangeOrderStatus = `UPDATE orders SET order_status = $1 WHERE order_number = $2`
-	queryGetNotFinished    = `SELECT * FROM orders WHERE order_status = 'NEW' OR order_status = 'PROCESSING'`
+	queryGetNotFinished    = `SELECT (order_number) FROM orders WHERE order_status = 'NEW' OR order_status = 'PROCESSING'`
 	queryGetOrder          = `SELECT (order_number) FROM orders WHERE order_number = $1`
 
 	queryNewWithdraw     = `INSERT INTO withdrawals(order_customer, order_number, sum, withdraw_time) VALUES ($1, $2, $3, $4)`
@@ -118,10 +118,12 @@ func (p *PostgreSQLStorage) NewUser(ctx context.Context, user *obj.User) error {
 func (p *PostgreSQLStorage) GetUser(ctx context.Context, login string) (*obj.User, error) {
 	row := p.pool.QueryRow(ctx, queryGetUser, login)
 	usr := &obj.User{}
-	if err := row.Scan(&usr.UserID, &usr.Login, &usr.Password); err != nil {
+	p.logger.Infof("initial user data %v", usr)
+	if err := row.Scan(&usr.UserID, &usr.Login, &usr.Password, &usr.Balance, &usr.Withdraw); err != nil {
 		p.logger.Errorf("Database scan user: %s. %v", login, err)
 		return nil, err
 	}
+	p.logger.Infof("Get user data %v", usr)
 	return usr, nil
 }
 
@@ -135,9 +137,10 @@ func (p *PostgreSQLStorage) GetLastUserID(ctx context.Context) (uint64, error) {
 	return userID, nil
 }
 
-func (p *PostgreSQLStorage) NewOrder(ctx context.Context, number uint64, userid uint64) error {
+func (p *PostgreSQLStorage) NewOrder(ctx context.Context, number uint64, userID uint64) error {
 	t := time.Now().Format(time.RFC3339)
-	_, err := p.pool.Exec(ctx, queryNewOrder, number, userid, t, obj.OrderStatusNew)
+	log.Println(number, userID, t)
+	_, err := p.pool.Exec(ctx, queryNewOrder, number, userID, t, obj.OrderStatusNew)
 	if err != nil {
 		p.logger.Errorf("Database exec order: %s. %v", number, err)
 		return err
@@ -193,7 +196,7 @@ func (p *PostgreSQLStorage) GetUnfinishedOrders(ctx context.Context) ([]*obj.Ord
 	defer rows.Close()
 	for rows.Next() {
 		order := &obj.Order{}
-		if err := rows.Scan(&order.Number, &order.UserID, &order.Accrual, &order.UploadAt, &order.Status); err != nil {
+		if err = rows.Scan(&order.Number); err != nil {
 			p.logger.Errorf("Database scan order: %s.", err)
 			return nil, err
 		}

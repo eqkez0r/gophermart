@@ -73,14 +73,14 @@ func RegisterHandler(
 			return
 		}
 
-		userid, err := storage.GetLastUserID(ctx)
+		userID, err := storage.GetLastUserID(ctx)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)
 			return
 		}
 
-		token, err := jwt.CreateJWT(newUser.Login, userid)
+		token, err := jwt.CreateJWT(newUser.Login, userID)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)

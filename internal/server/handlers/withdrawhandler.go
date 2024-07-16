@@ -33,7 +33,7 @@ func WithdrawHandler(
 
 		token := c.Request.Header.Get("Authorization")
 		withdraw := &obj.Withdraw{}
-		_, userId, _, err := jwt.JWTPayload(token)
+		_, userID, _, err := jwt.JWTPayload(token)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)
@@ -67,7 +67,7 @@ func WithdrawHandler(
 			return
 		}
 
-		err = store.NewWithdraw(ctx, userId, uint64(number), withdraw.Sum)
+		err = store.NewWithdraw(ctx, userID, uint64(number), withdraw.Sum)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			switch {

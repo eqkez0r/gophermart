@@ -59,7 +59,7 @@ func AuthHandler(
 			c.Status(http.StatusUnauthorized)
 			return
 		}
-
+		logger.Infof("Authorized user: %v", user)
 		token, err := jwt.CreateJWT(u.Login, u.UserID)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))

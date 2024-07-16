@@ -3,6 +3,7 @@ package jwt
 import (
 	"errors"
 	"github.com/golang-jwt/jwt/v4"
+	"log"
 	"time"
 )
 
@@ -22,6 +23,7 @@ type Claims struct {
 }
 
 func CreateJWT(login string, userID uint64) (string, error) {
+	log.Printf("create token for user %d login: %s", userID, login)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenexp)),
@@ -50,6 +52,6 @@ func JWTPayload(tokenString string) (string, uint64, time.Time, error) {
 	if !token.Valid {
 		return "", 0, time.Time{}, ErrInvalidToken
 	}
-
+	log.Printf("parsed values login: %s; user_id: %d", claims.Login, claims.UserID)
 	return claims.Login, claims.UserID, claims.ExpiresAt.Time, nil
 }

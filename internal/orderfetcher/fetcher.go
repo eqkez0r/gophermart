@@ -2,6 +2,7 @@ package orderfetcher
 
 import (
 	"context"
+	"encoding/json"
 	obj "github.com/eqkez0r/gophermart/pkg/objects"
 	"github.com/go-resty/resty/v2"
 	"go.uber.org/zap"
@@ -85,6 +86,7 @@ func (or *OrderFetcher) Run(ctx context.Context, wg *sync.WaitGroup) {
 						}
 					case http.StatusOK:
 						{
+							or.logger.Infof("Successfully request to order number %d. Response: %v", orderNum, res.String())
 
 						}
 					}
@@ -94,6 +96,19 @@ func (or *OrderFetcher) Run(ctx context.Context, wg *sync.WaitGroup) {
 	}
 }
 
-func (or *OrderFetcher) getOrders(ctx context.Context) error {
+func (or *OrderFetcher) Post(ctx context.Context, order *obj.Withdraw) error {
+	b, err := json.Marshal(order)
+	if err != nil {
+		return err
+	}
+
+	resp, err := or.client.R().
+		SetBody(b).
+		SetHeader("Content-Type", "application/json").
+		Post("http://" + or.accrualuri + "/api/orders")
+	if err != nil {
+		return err
+	}
+	or.logger.Infof("Order response status %s, resposne: %s", resp.Status(), resp.String())
 	return nil
 }

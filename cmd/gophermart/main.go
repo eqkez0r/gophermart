@@ -40,7 +40,7 @@ func main() {
 	wg.Add(1)
 	go of.Run(ctx, &wg)
 
-	server, err := httpserver.New(ctx, cfg, suggaredLogger, s)
+	server, err := httpserver.New(ctx, cfg, suggaredLogger, s, of)
 	if err != nil {
 		suggaredLogger.Fatal(err)
 	}

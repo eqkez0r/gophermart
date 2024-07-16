@@ -5,6 +5,7 @@ import (
 	"errors"
 	e "github.com/eqkez0r/gophermart/pkg/error"
 	"github.com/eqkez0r/gophermart/pkg/jwt"
+	obj "github.com/eqkez0r/gophermart/pkg/objects"
 	"github.com/eqkez0r/gophermart/utils/luhn"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -23,13 +24,14 @@ type NewOrderProvider interface {
 }
 
 type OrderFetcherToAccrualService interface {
-	RegisterNewOrder(context.Context, uint64, uint64) error
+	Post(context.Context, *obj.Withdraw) error
 }
 
 func NewOrderHandler(
 	ctx context.Context,
 	logger *zap.SugaredLogger,
 	store NewOrderProvider,
+	of OrderFetcherToAccrualService,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		const op = "Error in new order handler: "
@@ -62,13 +64,14 @@ func NewOrderHandler(
 			return
 		}
 		token := c.Request.Header.Get("Authorization")
-		_, userid, _, err := jwt.JWTPayload(token)
+		_, userID, _, err := jwt.JWTPayload(token)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusUnauthorized)
 			return
 		}
-		if err = store.NewOrder(ctx, number, userid); err != nil {
+		logger.Infof("user id: %s", userID)
+		if err = store.NewOrder(ctx, number, userID); err != nil {
 			logger.Error(e.Wrap(op, err))
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) {
@@ -79,6 +82,15 @@ func NewOrderHandler(
 					return
 				}
 			}
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+		withdraw := &obj.Withdraw{
+			Order: strconv.Itoa(int(number)),
+		}
+		err = of.Post(ctx, withdraw)
+		if err != nil {
+			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)
 			return
 		}

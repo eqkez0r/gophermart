@@ -3,6 +3,7 @@ package httpserver
 import (
 	"context"
 	"github.com/eqkez0r/gophermart/internal/config"
+	"github.com/eqkez0r/gophermart/internal/orderfetcher"
 	"github.com/eqkez0r/gophermart/internal/server/handlers"
 	"github.com/eqkez0r/gophermart/internal/server/middleware"
 	"github.com/eqkez0r/gophermart/internal/storage"
@@ -29,6 +30,7 @@ func New(
 	cfg *config.Config,
 	logger *zap.SugaredLogger,
 	s storage.Storage,
+	of *orderfetcher.OrderFetcher,
 ) (*HTTPServer, error) {
 	const op = "Initial server error"
 
@@ -46,7 +48,7 @@ func New(
 
 	userAPI := engine.Group(APIUserRoute)
 	userAPI.Use(middleware.Logger(logger), middleware.Auth(ctx, logger, s), middleware.Gzip(logger))
-	userAPI.POST(handlers.NewOrderHandlerPath, handlers.NewOrderHandler(ctx, logger, s))
+	userAPI.POST(handlers.NewOrderHandlerPath, handlers.NewOrderHandler(ctx, logger, s, of))
 	userAPI.GET(handlers.OrderListHandlerPath, handlers.OrderListHandler(ctx, logger, s))
 	userAPI.GET(handlers.WithdrawalsHandlerPath, handlers.WithdrawalsHandler(ctx, logger, s))
 
