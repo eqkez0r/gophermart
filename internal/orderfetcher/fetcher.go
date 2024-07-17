@@ -44,8 +44,7 @@ func New(
 }
 
 func (or *OrderFetcher) Run(ctx context.Context, wg *sync.WaitGroup) {
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -106,7 +105,8 @@ func (or *OrderFetcher) Run(ctx context.Context, wg *sync.WaitGroup) {
 						}
 					}
 				}
-				<-ticker.C
+				or.logger.Info("order fetcher delay")
+				time.Sleep(2 * time.Second)
 			}
 		}
 	}

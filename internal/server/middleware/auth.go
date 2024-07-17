@@ -26,6 +26,7 @@ func Auth(
 		if token == "" {
 			logger.Error(e.Wrap(op, fmt.Errorf("empty field")))
 			c.Status(http.StatusUnauthorized)
+			c.Abort()
 			return
 		}
 
@@ -33,6 +34,7 @@ func Auth(
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)
+			c.Abort()
 			return
 		}
 
@@ -40,18 +42,21 @@ func Auth(
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusUnauthorized)
+			c.Abort()
 			return
 		}
 
 		if !ok {
 			logger.Error(e.Wrap(op, fmt.Errorf("user not found")))
 			c.Status(http.StatusUnauthorized)
+			c.Abort()
 			return
 		}
 
 		if time.Now().After(ttl) {
 			logger.Error(e.Wrap(op, fmt.Errorf("token expired")))
 			c.Status(http.StatusUnauthorized)
+			c.Abort()
 			return
 		}
 
