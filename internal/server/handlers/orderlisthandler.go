@@ -16,7 +16,7 @@ const (
 )
 
 type OrderListProvider interface {
-	GetOrdersList(ctx context.Context, userID uint64) ([]*obj.Order, error)
+	GetOrdersList(ctx context.Context, login string) ([]*obj.Order, error)
 }
 
 func OrderListHandler(
@@ -29,14 +29,14 @@ func OrderListHandler(
 
 		token := c.Request.Header.Get("Authorization")
 
-		_, userID, _, err := jwt.JWTPayload(token)
+		login, _, err := jwt.JWTPayload(token)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)
 			return
 		}
 
-		orders, err := store.GetOrdersList(ctx, userID)
+		orders, err := store.GetOrdersList(ctx, login)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)

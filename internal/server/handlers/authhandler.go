@@ -60,7 +60,7 @@ func AuthHandler(
 			return
 		}
 		logger.Infof("Authorized user: %v", user)
-		token, err := jwt.CreateJWT(u.Login, u.UserID)
+		token, err := jwt.CreateJWT(u.Login)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)

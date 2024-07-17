@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
-	"log"
 	"time"
 )
 
@@ -47,6 +46,7 @@ const (
                    order_customer,
                    order_time,
                    order_status) VALUES ($1,$2,$3,$4)`
+
 	queryGetOrderList      = `SELECT * FROM orders WHERE order_customer = $1`
 	queryUpdateOrderStatus = `UPDATE orders SET order_status = $1 WHERE order_number = $2`
 	queryGetNotFinished    = `SELECT order_customer, order_number FROM orders WHERE order_status = 'NEW' OR order_status = 'PROCESSING'`
@@ -135,46 +135,6 @@ func (p *PostgreSQLStorage) GetLastUserID(ctx context.Context) (uint64, error) {
 	return userID, nil
 }
 
-func (p *PostgreSQLStorage) NewOrder(ctx context.Context, number string, userID uint64) error {
-	t := time.Now().Format(time.RFC3339)
-	log.Println(number, userID, t)
-	_, err := p.pool.Exec(ctx, queryNewOrder, number, userID, t, obj.OrderStatusNew)
-	if err != nil {
-		p.logger.Errorf("Database exec order: %s. %v", number, err)
-		return err
-	}
-	return nil
-}
-
-func (p *PostgreSQLStorage) GetOrdersList(ctx context.Context, userID uint64) ([]*obj.Order, error) {
-	orders := make([]*obj.Order, 0)
-	rows, err := p.pool.Query(ctx, queryGetOrderList, int64(userID))
-	if err != nil {
-		p.logger.Errorf("Database query orders list: %s. %v", userID, err)
-		return nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		order := &obj.Order{}
-		if err = rows.Scan(&order.Number, &order.UserID, &order.Accrual, &order.UploadAt, &order.Status); err != nil {
-			p.logger.Errorf("Database query orders list: %s. %v", userID, err)
-			return nil, err
-		}
-		orders = append(orders, order)
-	}
-	return orders, nil
-}
-
-func (p *PostgreSQLStorage) GetBalance(ctx context.Context, userID uint64) (*obj.AccrualBalance, error) {
-	balance := &obj.AccrualBalance{}
-	row := p.pool.QueryRow(ctx, queryGetBalance, int64(userID))
-	if err := row.Scan(&balance.Balance, &balance.Withdraw); err != nil {
-		p.logger.Errorf("Database query account balance: %s. %v", userID, err)
-		return nil, err
-	}
-	return balance, nil
-}
-
 func (p *PostgreSQLStorage) IsUserExist(ctx context.Context, login string) (bool, error) {
 	row := p.pool.QueryRow(ctx, queryGetOnlyLogin, login)
 	var dblogin string
@@ -182,6 +142,76 @@ func (p *PostgreSQLStorage) IsUserExist(ctx context.Context, login string) (bool
 		return false, err
 	}
 	return true, nil
+}
+
+func (p *PostgreSQLStorage) NewOrder(ctx context.Context, login, number string) error {
+
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+
+	user, err := p.GetUser(ctx, login)
+	if err != nil {
+		return err
+	}
+	t := time.Now().Format(time.RFC3339)
+	_, err = p.pool.Exec(ctx, queryNewOrder, number, user.UserID, t, obj.OrderStatusNew)
+	if err != nil {
+		p.logger.Errorf("Database exec order: %s. %v", number, err)
+		return err
+	}
+	err = tx.Commit(ctx)
+	defer func() {
+		if err != nil {
+			err = tx.Rollback(ctx)
+			if err != nil {
+				p.logger.Errorf("Database rollback order: %s. %v", number, err)
+			}
+		}
+	}()
+	return nil
+}
+
+func (p *PostgreSQLStorage) GetOrdersList(ctx context.Context, login string) ([]*obj.Order, error) {
+	orders := make([]*obj.Order, 0)
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := p.GetUser(ctx, login)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := p.pool.Query(ctx, queryGetOrderList, user.UserID)
+	if err != nil {
+		p.logger.Errorf("Database query orders list: %s. %v", user.UserID, err)
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		order := &obj.Order{}
+		if err = rows.Scan(&order.Number, &order.UserID, &order.Accrual, &order.UploadAt, &order.Status); err != nil {
+			p.logger.Errorf("Database query orders list: %s. %v", user.UserID, err)
+			return nil, err
+		}
+		orders = append(orders, order)
+	}
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			err = tx.Rollback(ctx)
+			if err != nil {
+				p.logger.Errorf("Database rollback order: %s. %v", user.UserID, err)
+			}
+		}
+	}()
+	return orders, nil
 }
 
 func (p *PostgreSQLStorage) GetUnfinishedOrders(ctx context.Context) ([]*obj.Order, error) {
@@ -204,12 +234,46 @@ func (p *PostgreSQLStorage) GetUnfinishedOrders(ctx context.Context) ([]*obj.Ord
 	return orders, nil
 }
 
-func (p *PostgreSQLStorage) NewWithdraw(ctx context.Context, userID uint64, number string, withdraw float64) error {
+func (p *PostgreSQLStorage) GetBalance(ctx context.Context, login string) (*obj.AccrualBalance, error) {
+	balance := &obj.AccrualBalance{}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := p.GetUser(ctx, login)
+	if err != nil {
+		return nil, err
+	}
+	row := p.pool.QueryRow(ctx, queryGetBalance, user.UserID)
+	if err := row.Scan(&user.Balance, &user.Withdraw); err != nil {
+		p.logger.Errorf("Database query account balance: %s. %v", user.UserID, err)
+		return nil, err
+	}
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			err = tx.Rollback(ctx)
+			if err != nil {
+				p.logger.Errorf("Database rollback: %s.", err)
+			}
+		}
+	}()
+	return balance, nil
+}
+
+func (p *PostgreSQLStorage) NewWithdraw(ctx context.Context, login, number string, withdraw float64) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-
+	user, err := p.GetUser(ctx, login)
+	if err != nil {
+		return err
+	}
 	order := &obj.Order{}
 	err = p.pool.QueryRow(ctx, queryGetOrder, number).Scan(&order)
 	if err != nil {
@@ -219,31 +283,25 @@ func (p *PostgreSQLStorage) NewWithdraw(ctx context.Context, userID uint64, numb
 		return err
 	}
 
-	balance, err := p.GetBalance(ctx, userID)
-	if err != nil {
-		p.logger.Errorf("Database query account balance: %s.", err)
-		return err
-	}
-
-	if balance.Balance < withdraw {
-		p.logger.Errorf("Not enough balance for user: %s.", userID)
+	if user.Balance < withdraw {
+		p.logger.Errorf("Not enough balance for user: %s.", user.UserID)
 		return e.ErrBalanceIsNotEnough
 	}
 
 	p.logger.Infof("Withdrawing user: %s. Before balance: %d, NewWithdraw: %d.",
-		userID, balance.Balance, balance.Withdraw)
-	balance.Balance -= withdraw
-	balance.Withdraw += withdraw
+		user.UserID, user.Balance, user.Withdraw)
+	user.Balance -= withdraw
+	user.Withdraw += withdraw
 	p.logger.Infof("Withdrawing user: %s. After balance: %d, NewWithdraw: %d.",
-		userID, balance.Balance, balance.Withdraw)
+		user.UserID, user.Balance, user.Withdraw)
 
 	if _, err = p.pool.Exec(ctx, queryNewWithdraw,
-		userID, balance.Balance, balance.Withdraw, time.Now().Format(time.RFC3339)); err != nil {
-		p.logger.Errorf("Database exec new withdraw: %s.", userID)
+		user.UserID, user.Balance, user.Withdraw, time.Now().Format(time.RFC3339)); err != nil {
+		p.logger.Errorf("Database exec new withdraw: %s.", user.UserID)
 		return err
 	}
 
-	if _, err = p.pool.Exec(ctx, queryUpdateBalance, balance.Balance, balance.Withdraw); err != nil {
+	if _, err = p.pool.Exec(ctx, queryUpdateBalance, user.Balance, user.Withdraw); err != nil {
 		p.logger.Errorf("Database exec change account balance: %s.", err)
 		return err
 	}
@@ -256,13 +314,16 @@ func (p *PostgreSQLStorage) NewWithdraw(ctx context.Context, userID uint64, numb
 	defer func() {
 		if err != nil {
 			p.logger.Info("Rollback transaction")
-			tx.Rollback(ctx)
+			err = tx.Rollback(ctx)
+			if err != nil {
+				p.logger.Errorf("Rollback transaction: %s.", err)
+			}
 		}
 	}()
 	return nil
 }
 
-func (p *PostgreSQLStorage) Withdrawals(ctx context.Context, userID uint64) ([]*obj.Withdraw, error) {
+func (p *PostgreSQLStorage) Withdrawals(ctx context.Context, login string) ([]*obj.Withdraw, error) {
 	withdrawals := make([]*obj.Withdraw, 0)
 	rows, err := p.pool.Query(ctx, queryGetNotFinished)
 	if err != nil {
@@ -281,7 +342,7 @@ func (p *PostgreSQLStorage) Withdrawals(ctx context.Context, userID uint64) ([]*
 	return withdrawals, nil
 }
 
-func (p *PostgreSQLStorage) UpdateAccrual(ctx context.Context, userID uint64, accrual *obj.Accrual) error {
+func (p *PostgreSQLStorage) UpdateAccrual(ctx context.Context, userid uint64, accrual *obj.Accrual) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -294,9 +355,9 @@ func (p *PostgreSQLStorage) UpdateAccrual(ctx context.Context, userID uint64, ac
 	}
 
 	if accrual.Status == obj.AccrualStatusProcessed && accrual.Accrual != nil {
-		_, err = p.pool.Exec(ctx, queryUpdateAccrualBalance, accrual.Accrual, userID)
+		_, err = p.pool.Exec(ctx, queryUpdateAccrualBalance, accrual.Accrual, userid)
 		if err != nil {
-			p.logger.Errorf("Database exec update accrual balance: %s.", userID)
+			p.logger.Errorf("Database exec update accrual balance: %s.", userid)
 			return err
 		}
 	}

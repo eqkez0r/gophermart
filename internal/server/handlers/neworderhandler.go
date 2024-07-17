@@ -5,7 +5,6 @@ import (
 	"errors"
 	e "github.com/eqkez0r/gophermart/pkg/error"
 	"github.com/eqkez0r/gophermart/pkg/jwt"
-	obj "github.com/eqkez0r/gophermart/pkg/objects"
 	"github.com/eqkez0r/gophermart/utils/luhn"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -20,11 +19,7 @@ const (
 )
 
 type NewOrderProvider interface {
-	NewOrder(context.Context, string, uint64) error
-}
-
-type OrderFetcherToAccrualService interface {
-	Post(context.Context, *obj.Withdraw) error
+	NewOrder(context.Context, string, string) error
 }
 
 func NewOrderHandler(
@@ -63,14 +58,14 @@ func NewOrderHandler(
 			return
 		}
 		token := c.Request.Header.Get("Authorization")
-		_, userID, _, err := jwt.JWTPayload(token)
+		login, _, err := jwt.JWTPayload(token)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusUnauthorized)
 			return
 		}
-		logger.Infof("user id: %s", userID)
-		if err = store.NewOrder(ctx, string(body), userID); err != nil {
+		logger.Infof("user id: %s", login)
+		if err = store.NewOrder(ctx, string(body), login); err != nil {
 			logger.Error(e.Wrap(op, err))
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) {

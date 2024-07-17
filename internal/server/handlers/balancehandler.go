@@ -15,7 +15,7 @@ const (
 )
 
 type BalanceProvider interface {
-	GetBalance(ctx context.Context, userID uint64) (*obj.AccrualBalance, error)
+	GetBalance(ctx context.Context, login string) (*obj.AccrualBalance, error)
 }
 
 func BalanceHandler(
@@ -28,14 +28,14 @@ func BalanceHandler(
 
 		token := c.Request.Header.Get("Authorization")
 
-		_, userID, _, err := jwt.JWTPayload(token)
+		login, _, err := jwt.JWTPayload(token)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)
 			return
 		}
 
-		balance, err := store.GetBalance(ctx, userID)
+		balance, err := store.GetBalance(ctx, login)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)

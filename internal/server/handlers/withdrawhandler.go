@@ -20,7 +20,7 @@ const (
 )
 
 type WithdrawHandlerProvider interface {
-	NewWithdraw(context.Context, uint64, string, float64) error
+	NewWithdraw(context.Context, string, string, float64) error
 }
 
 func WithdrawHandler(
@@ -33,7 +33,7 @@ func WithdrawHandler(
 
 		token := c.Request.Header.Get("Authorization")
 		withdraw := &obj.Withdraw{}
-		_, userID, _, err := jwt.JWTPayload(token)
+		login, _, err := jwt.JWTPayload(token)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)
@@ -67,7 +67,7 @@ func WithdrawHandler(
 			return
 		}
 
-		err = store.NewWithdraw(ctx, userID, withdraw.Order, withdraw.Sum)
+		err = store.NewWithdraw(ctx, login, withdraw.Order, withdraw.Sum)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			switch {

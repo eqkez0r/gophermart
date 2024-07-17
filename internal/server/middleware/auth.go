@@ -25,11 +25,11 @@ func Auth(
 		token := c.Request.Header.Get("Authorization")
 		if token == "" {
 			logger.Error(e.Wrap(op, fmt.Errorf("empty field")))
-			c.Status(http.StatusBadRequest)
+			c.Status(http.StatusUnauthorized)
 			return
 		}
 
-		login, _, ttl, err := jwt.JWTPayload(token)
+		login, ttl, err := jwt.JWTPayload(token)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)

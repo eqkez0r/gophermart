@@ -10,12 +10,12 @@ type Storage interface {
 	GetUser(context.Context, string) (*obj.User, error)
 	GetLastUserID(context.Context) (uint64, error)
 	IsUserExist(context.Context, string) (bool, error)
-	NewOrder(context.Context, string, uint64) error
-	GetOrdersList(context.Context, uint64) ([]*obj.Order, error)
+	NewOrder(context.Context, string, string) error
+	GetOrdersList(context.Context, string) ([]*obj.Order, error)
 	GetUnfinishedOrders(context.Context) ([]*obj.Order, error)
-	GetBalance(context.Context, uint64) (*obj.AccrualBalance, error)
-	NewWithdraw(context.Context, uint64, string, float64) error
-	Withdrawals(context.Context, uint64) ([]*obj.Withdraw, error)
+	GetBalance(context.Context, string) (*obj.AccrualBalance, error)
+	NewWithdraw(context.Context, string, string, float64) error
+	Withdrawals(context.Context, string) ([]*obj.Withdraw, error)
 	UpdateAccrual(context.Context, uint64, *obj.Accrual) error
 	GracefulShutdown() error
 }

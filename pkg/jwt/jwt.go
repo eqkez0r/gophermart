@@ -18,18 +18,16 @@ var (
 
 type Claims struct {
 	jwt.RegisteredClaims
-	UserID uint64
-	Login  string
+	Login string
 }
 
-func CreateJWT(login string, userID uint64) (string, error) {
-	log.Printf("create token for user %d login: %s", userID, login)
+func CreateJWT(login string) (string, error) {
+	log.Printf("create token for login: %s", login)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenexp)),
 		},
-		Login:  login,
-		UserID: userID,
+		Login: login,
 	})
 	tokenString, err := token.SignedString([]byte(key))
 	if err != nil {
@@ -38,7 +36,7 @@ func CreateJWT(login string, userID uint64) (string, error) {
 	return tokenString, nil
 }
 
-func JWTPayload(tokenString string) (string, uint64, time.Time, error) {
+func JWTPayload(tokenString string) (string, time.Time, error) {
 	claims := &Claims{}
 
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
@@ -46,12 +44,12 @@ func JWTPayload(tokenString string) (string, uint64, time.Time, error) {
 	})
 
 	if err != nil {
-		return "", 0, time.Time{}, err
+		return "", time.Time{}, err
 	}
 
 	if !token.Valid {
-		return "", 0, time.Time{}, ErrInvalidToken
+		return "", time.Time{}, ErrInvalidToken
 	}
-	log.Printf("parsed values login: %s; user_id: %d", claims.Login, claims.UserID)
-	return claims.Login, claims.UserID, claims.ExpiresAt.Time, nil
+	log.Printf("parsed values login: %s", claims.Login)
+	return claims.Login, claims.ExpiresAt.Time, nil
 }

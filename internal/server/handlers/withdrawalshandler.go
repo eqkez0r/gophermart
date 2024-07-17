@@ -15,7 +15,7 @@ const (
 )
 
 type WithdrawalsProvider interface {
-	Withdrawals(context.Context, uint64) ([]*obj.Withdraw, error)
+	Withdrawals(context.Context, string) ([]*obj.Withdraw, error)
 }
 
 func WithdrawalsHandler(
@@ -28,21 +28,21 @@ func WithdrawalsHandler(
 
 		token := c.Request.Header.Get("Authorization")
 
-		_, userID, _, err := jwt.JWTPayload(token)
+		login, _, err := jwt.JWTPayload(token)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)
 			return
 		}
 
-		withdrawals, err := store.Withdrawals(ctx, userID)
+		withdrawals, err := store.Withdrawals(ctx, login)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)
 			return
 		}
 		if len(withdrawals) == 0 {
-			logger.Infof("No Withdrawals for user %d", userID)
+			logger.Infof("No Withdrawals for user %s", login)
 			c.Status(http.StatusNoContent)
 			return
 		}
