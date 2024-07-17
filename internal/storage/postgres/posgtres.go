@@ -38,7 +38,7 @@ const (
 	queryGetUser              = `SELECT * FROM users WHERE login = $1`
 	queryGetOnlyLogin         = `SELECT login FROM users WHERE login = $1`
 	queryGetLastUserID        = "SELECT user_id FROM users ORDER BY user_id DESC LIMIT 1"
-	queryGetBalance           = `SELECT (accrual_balance, withdrawal_balance) FROM users WHERE user_id = $1`
+	queryGetBalance           = `SELECT accrual_balance, withdrawal_balance FROM users WHERE user_id = $1`
 	queryUpdateBalance        = `UPDATE users SET accrual_balance = $1, withdrawal_balance = $2 WHERE user_id = $3`
 	queryUpdateAccrualBalance = `UPDATE users SET accrual_balance = users.accrual_balance + $1 WHERE user_id = $2`
 
@@ -50,7 +50,7 @@ const (
 	queryGetOrderList      = `SELECT * FROM orders WHERE order_customer = $1`
 	queryUpdateOrderStatus = `UPDATE orders SET order_status = $1 WHERE order_number = $2`
 	queryGetNotFinished    = `SELECT order_customer, order_number FROM orders WHERE order_status = 'NEW' OR order_status = 'PROCESSING'`
-	queryGetOrder          = `SELECT (order_number) FROM orders WHERE order_number = $1`
+	queryGetOrder          = `SELECT order_customer, order_number FROM orders WHERE order_number = $1`
 
 	queryNewWithdraw     = `INSERT INTO withdrawals(order_customer, order_number, sum, withdraw_time) VALUES ($1, $2, $3, $4)`
 	queryGetWithdrawList = `SELECT * FROM withdrawals WHERE order_customer = $1`
@@ -155,6 +155,15 @@ func (p *PostgreSQLStorage) NewOrder(ctx context.Context, login, number string) 
 	if err != nil {
 		return err
 	}
+
+	var userid uint64
+	var num string
+	row := p.pool.QueryRow(ctx, queryGetOrder, number)
+	err = row.Scan(&userid, &num)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) && user.UserID != userid {
+		return e.ErrIsOrderExistWithAnotherCustomer
+	}
+
 	t := time.Now().Format(time.RFC3339)
 	_, err = p.pool.Exec(ctx, queryNewOrder, number, user.UserID, t, obj.OrderStatusNew)
 	if err != nil {
@@ -246,7 +255,7 @@ func (p *PostgreSQLStorage) GetBalance(ctx context.Context, login string) (*obj.
 		return nil, err
 	}
 	row := p.pool.QueryRow(ctx, queryGetBalance, user.UserID)
-	if err := row.Scan(&user.Balance, &user.Withdraw); err != nil {
+	if err = row.Scan(&user.Balance, &user.Withdraw); err != nil {
 		p.logger.Errorf("Database query account balance: %s. %v", user.UserID, err)
 		return nil, err
 	}
@@ -342,6 +351,7 @@ func (p *PostgreSQLStorage) Withdrawals(ctx context.Context, login string) ([]*o
 	return withdrawals, nil
 }
 
+// TODO: UPD TIME
 func (p *PostgreSQLStorage) UpdateAccrual(ctx context.Context, userid uint64, accrual *obj.Accrual) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {

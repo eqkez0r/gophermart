@@ -32,7 +32,7 @@ func main() {
 	if err != nil {
 		suggaredLogger.Fatal(err)
 	}
-
+	defer s.GracefulShutdown()
 	var wg sync.WaitGroup
 	of := orderfetcher.New(suggaredLogger, cfg.AccrualSystemAddress, s)
 
@@ -45,5 +45,5 @@ func main() {
 	}
 	server.Run(ctx)
 	wg.Wait()
-	s.GracefulShutdown()
+
 }

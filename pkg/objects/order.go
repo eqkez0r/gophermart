@@ -10,7 +10,7 @@ const (
 )
 
 type Order struct {
-	UserID   uint64    `json:"user_id"`
+	UserID   uint64    `json:"-"`
 	Status   string    `json:"status"`
 	UploadAt time.Time `json:"upload_at"`
 	Number   string    `json:"number,omitempty"`

@@ -44,6 +44,8 @@ func New(
 }
 
 func (or *OrderFetcher) Run(ctx context.Context, wg *sync.WaitGroup) {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -60,7 +62,6 @@ func (or *OrderFetcher) Run(ctx context.Context, wg *sync.WaitGroup) {
 					continue
 				}
 				for _, o := range orders {
-
 				retry:
 					or.logger.Infof("Send request to order number %d", o.Number)
 					res, err := or.client.R().
@@ -105,15 +106,8 @@ func (or *OrderFetcher) Run(ctx context.Context, wg *sync.WaitGroup) {
 						}
 					}
 				}
+				<-ticker.C
 			}
 		}
 	}
-}
-
-func (or *OrderFetcher) handle(
-	accrual *obj.Accrual,
-
-) error {
-
-	return nil
 }

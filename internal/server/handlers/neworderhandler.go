@@ -65,19 +65,31 @@ func NewOrderHandler(
 			return
 		}
 		logger.Infof("user id: %s", login)
-		if err = store.NewOrder(ctx, string(body), login); err != nil {
+		if err = store.NewOrder(ctx, login, string(body)); err != nil {
 			logger.Error(e.Wrap(op, err))
 			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) {
-				logger.Info(err, pgErr)
-				if pgErr.Code == "23505" {
-					logger.Info("Is order was accepted")
-					c.Status(http.StatusOK)
+			switch {
+			case errors.As(err, &pgErr):
+				{
+					logger.Info(err, pgErr)
+					if pgErr.Code == "23505" {
+						logger.Info("Is order was accepted")
+						c.Status(http.StatusOK)
+						return
+					}
+				}
+			case errors.Is(err, e.ErrIsOrderExistWithAnotherCustomer):
+				{
+					logger.Error(e.Wrap(op, err))
+					c.Status(http.StatusConflict)
+					return
+				}
+			default:
+				{
+					c.Status(http.StatusInternalServerError)
 					return
 				}
 			}
-			c.Status(http.StatusInternalServerError)
-			return
 		}
 
 		c.Status(http.StatusAccepted)
