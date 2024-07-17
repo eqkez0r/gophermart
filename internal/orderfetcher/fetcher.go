@@ -44,9 +44,7 @@ func New(
 }
 
 func (or *OrderFetcher) Run(ctx context.Context, wg *sync.WaitGroup) {
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-	for range ticker.C {
+	for {
 		select {
 		case <-ctx.Done():
 			{

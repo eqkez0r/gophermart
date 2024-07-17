@@ -1,14 +1,5 @@
 package luhn
 
-func CalculateLuhn(number uint64) uint64 {
-	checkNumber := checksum(number)
-
-	if checkNumber == 0 {
-		return 0
-	}
-	return 10 - checkNumber
-}
-
 func Valid(number uint64) bool {
 	return (number%10+checksum(number/10))%10 == 0
 }
