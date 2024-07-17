@@ -48,7 +48,7 @@ func New(
 
 	userAPI := engine.Group(APIUserRoute)
 	userAPI.Use(middleware.Logger(logger), middleware.Auth(ctx, logger, s), middleware.Gzip(logger))
-	userAPI.POST(handlers.NewOrderHandlerPath, handlers.NewOrderHandler(ctx, logger, s, of))
+	userAPI.POST(handlers.NewOrderHandlerPath, handlers.NewOrderHandler(ctx, logger, s))
 	userAPI.GET(handlers.OrderListHandlerPath, handlers.OrderListHandler(ctx, logger, s))
 	userAPI.GET(handlers.WithdrawalsHandlerPath, handlers.WithdrawalsHandler(ctx, logger, s))
 

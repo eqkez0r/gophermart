@@ -20,7 +20,7 @@ const (
 )
 
 type WithdrawHandlerProvider interface {
-	NewWithdraw(context.Context, uint64, uint64, float64) error
+	NewWithdraw(context.Context, uint64, string, float64) error
 }
 
 func WithdrawHandler(
@@ -67,7 +67,7 @@ func WithdrawHandler(
 			return
 		}
 
-		err = store.NewWithdraw(ctx, userID, uint64(number), withdraw.Sum)
+		err = store.NewWithdraw(ctx, userID, withdraw.Order, withdraw.Sum)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
 			switch {

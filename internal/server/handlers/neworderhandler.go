@@ -20,7 +20,7 @@ const (
 )
 
 type NewOrderProvider interface {
-	NewOrder(context.Context, uint64, uint64) error
+	NewOrder(context.Context, string, uint64) error
 }
 
 type OrderFetcherToAccrualService interface {
@@ -31,7 +31,6 @@ func NewOrderHandler(
 	ctx context.Context,
 	logger *zap.SugaredLogger,
 	store NewOrderProvider,
-	of OrderFetcherToAccrualService,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		const op = "Error in new order handler: "
@@ -71,7 +70,7 @@ func NewOrderHandler(
 			return
 		}
 		logger.Infof("user id: %s", userID)
-		if err = store.NewOrder(ctx, number, userID); err != nil {
+		if err = store.NewOrder(ctx, string(body), userID); err != nil {
 			logger.Error(e.Wrap(op, err))
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) {
@@ -82,15 +81,6 @@ func NewOrderHandler(
 					return
 				}
 			}
-			c.Status(http.StatusInternalServerError)
-			return
-		}
-		withdraw := &obj.Withdraw{
-			Order: strconv.Itoa(int(number)),
-		}
-		err = of.Post(ctx, withdraw)
-		if err != nil {
-			logger.Error(e.Wrap(op, err))
 			c.Status(http.StatusInternalServerError)
 			return
 		}

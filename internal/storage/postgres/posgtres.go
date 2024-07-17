@@ -23,35 +23,33 @@ const (
 )`
 	queryCreateOrdersTable = `
 	CREATE TABLE orders(
-		order_number BIGINT UNIQUE NOT NULL, 
+		order_number VARCHAR(20) UNIQUE NOT NULL, 
 		order_customer INTEGER REFERENCES users(user_id) ON DELETE CASCADE NOT NULL, 
 		order_accrual DOUBLE PRECISION,
 		order_time TIMESTAMP WITH TIME ZONE NOT NULL,
 		order_status VARCHAR(10) NOT NULL 
 	)`
-	queryCreateWithdrawsTable = `
-	CREATE TABLE withdrawals(
-	    order_customer INTEGER REFERENCES users(user_id) ON DELETE CASCADE NOT NULL,
-	    order_number BIGINT REFERENCES orders(order_number),
-	    sum DOUBLE PRECISION REFERENCES orders(order_accrual),
-	    withdraw_time TIMESTAMP WITH TIME ZONE NOT NULL
-	)`
-
-	queryNewUser       = `INSERT INTO users(login, password, accrual_balance, withdrawal_balance) VALUES ($1, $2, 0, 0)`
-	queryGetUser       = `SELECT * FROM users WHERE login = $1`
-	queryGetOnlyLogin  = `SELECT login FROM users WHERE login = $1`
-	queryGetLastUserID = "SELECT user_id FROM users ORDER BY user_id DESC LIMIT 1"
-
-	queryGetBalance    = `SELECT (accrual_balance, withdrawal_balance) FROM users WHERE user_id = $1`
-	queryChangeBalance = `UPDATE users SET accrual_balance = $1, withdrawal_balance = $2 WHERE user_id = $3`
+	queryCreateWithdrawsTable = `CREATE TABLE withdraws(
+    	order_customer INTEGER REFERENCES users(user_id) ON DELETE CASCADE NOT NULL,
+    	order_number VARCHAR(20) REFERENCES orders(order_number) UNIQUE NOT NULL,
+    	accrual DOUBLE PRECISION NOT NULL,
+    	withdraw_time TIMESTAMP WITH TIME ZONE NOT NULL
+)`
+	queryNewUser              = `INSERT INTO users(login, password, accrual_balance, withdrawal_balance) VALUES ($1, $2, 0, 0)`
+	queryGetUser              = `SELECT * FROM users WHERE login = $1`
+	queryGetOnlyLogin         = `SELECT login FROM users WHERE login = $1`
+	queryGetLastUserID        = "SELECT user_id FROM users ORDER BY user_id DESC LIMIT 1"
+	queryGetBalance           = `SELECT (accrual_balance, withdrawal_balance) FROM users WHERE user_id = $1`
+	queryUpdateBalance        = `UPDATE users SET accrual_balance = $1, withdrawal_balance = $2 WHERE user_id = $3`
+	queryUpdateAccrualBalance = `UPDATE users SET accrual_balance = users.accrual_balance + $1 WHERE user_id = $2`
 
 	queryNewOrder = `INSERT INTO orders(order_number,
                    order_customer,
                    order_time,
                    order_status) VALUES ($1,$2,$3,$4)`
 	queryGetOrderList      = `SELECT * FROM orders WHERE order_customer = $1`
-	queryChangeOrderStatus = `UPDATE orders SET order_status = $1 WHERE order_number = $2`
-	queryGetNotFinished    = `SELECT (order_number) FROM orders WHERE order_status = 'NEW' OR order_status = 'PROCESSING'`
+	queryUpdateOrderStatus = `UPDATE orders SET order_status = $1 WHERE order_number = $2`
+	queryGetNotFinished    = `SELECT order_customer, order_number FROM orders WHERE order_status = 'NEW' OR order_status = 'PROCESSING'`
 	queryGetOrder          = `SELECT (order_number) FROM orders WHERE order_number = $1`
 
 	queryNewWithdraw     = `INSERT INTO withdrawals(order_customer, order_number, sum, withdraw_time) VALUES ($1, $2, $3, $4)`
@@ -137,7 +135,7 @@ func (p *PostgreSQLStorage) GetLastUserID(ctx context.Context) (uint64, error) {
 	return userID, nil
 }
 
-func (p *PostgreSQLStorage) NewOrder(ctx context.Context, number uint64, userID uint64) error {
+func (p *PostgreSQLStorage) NewOrder(ctx context.Context, number string, userID uint64) error {
 	t := time.Now().Format(time.RFC3339)
 	log.Println(number, userID, t)
 	_, err := p.pool.Exec(ctx, queryNewOrder, number, userID, t, obj.OrderStatusNew)
@@ -196,18 +194,24 @@ func (p *PostgreSQLStorage) GetUnfinishedOrders(ctx context.Context) ([]*obj.Ord
 	defer rows.Close()
 	for rows.Next() {
 		order := &obj.Order{}
-		if err = rows.Scan(&order.Number); err != nil {
+		if err = rows.Scan(&order.UserID, &order.Number); err != nil {
 			p.logger.Errorf("Database scan order: %s.", err)
 			return nil, err
 		}
 		orders = append(orders, order)
 	}
+
 	return orders, nil
 }
 
-func (p *PostgreSQLStorage) NewWithdraw(ctx context.Context, userID, orderID uint64, withdraw float64) error {
+func (p *PostgreSQLStorage) NewWithdraw(ctx context.Context, userID uint64, number string, withdraw float64) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+
 	order := &obj.Order{}
-	err := p.pool.QueryRow(ctx, queryGetOrder, orderID).Scan(&order)
+	err = p.pool.QueryRow(ctx, queryGetOrder, number).Scan(&order)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return e.ErrIsOrderIsNotExist
@@ -239,17 +243,28 @@ func (p *PostgreSQLStorage) NewWithdraw(ctx context.Context, userID, orderID uin
 		return err
 	}
 
-	if _, err = p.pool.Exec(ctx, queryChangeBalance, balance.Balance, balance.Withdraw); err != nil {
+	if _, err = p.pool.Exec(ctx, queryUpdateBalance, balance.Balance, balance.Withdraw); err != nil {
 		p.logger.Errorf("Database exec change account balance: %s.", err)
 		return err
 	}
 
+	err = tx.Commit(ctx)
+	if err != nil {
+		p.logger.Errorf("Database commit transaction: %s.", err)
+		return err
+	}
+	defer func() {
+		if err != nil {
+			p.logger.Info("Rollback transaction")
+			tx.Rollback(ctx)
+		}
+	}()
 	return nil
 }
 
 func (p *PostgreSQLStorage) Withdrawals(ctx context.Context, userID uint64) ([]*obj.Withdraw, error) {
 	withdrawals := make([]*obj.Withdraw, 0)
-	rows, err := p.pool.Query(ctx, queryGetNotFinished, int64(userID))
+	rows, err := p.pool.Query(ctx, queryGetNotFinished)
 	if err != nil {
 		p.logger.Errorf("Database query orders: %s.", err)
 		return nil, err
@@ -264,6 +279,41 @@ func (p *PostgreSQLStorage) Withdrawals(ctx context.Context, userID uint64) ([]*
 		withdrawals = append(withdrawals, withdraw)
 	}
 	return withdrawals, nil
+}
+
+func (p *PostgreSQLStorage) UpdateAccrual(ctx context.Context, userID uint64, accrual *obj.Accrual) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = p.pool.Exec(ctx, queryUpdateOrderStatus, obj.AccrualStatusToOrderStatus[accrual.Status], accrual.Order)
+	if err != nil {
+		p.logger.Errorf("Database exec update order status: %s.", err)
+		return err
+	}
+
+	if accrual.Status == obj.AccrualStatusProcessed && accrual.Accrual != nil {
+		_, err = p.pool.Exec(ctx, queryUpdateAccrualBalance, accrual.Accrual, userID)
+		if err != nil {
+			p.logger.Errorf("Database exec update accrual balance: %s.", userID)
+			return err
+		}
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		p.logger.Errorf("Database commit transaction: %s.", err)
+		return err
+	}
+	defer func() {
+		if err != nil {
+			err = tx.Rollback(ctx)
+			if err != nil {
+				p.logger.Errorf("Rollback transaction: %s.", err)
+			}
+		}
+	}()
+	return nil
 }
 
 func (p *PostgreSQLStorage) GracefulShutdown() error {

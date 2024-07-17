@@ -13,6 +13,6 @@ type Order struct {
 	UserID   uint64    `json:"user_id"`
 	Status   string    `json:"status"`
 	UploadAt time.Time `json:"upload_at"`
-	Number   *uint64   `json:"number,omitempty"`
+	Number   string    `json:"number,omitempty"`
 	Accrual  *float64  `json:"accrual,omitempty"`
 }

@@ -19,6 +19,7 @@ import (
 
 type OrdersProvider interface {
 	GetUnfinishedOrders(ctx context.Context) ([]*obj.Order, error)
+	UpdateAccrual(context.Context, uint64, *obj.Accrual) error
 }
 
 type OrderFetcher struct {
@@ -61,17 +62,17 @@ func (or *OrderFetcher) Run(ctx context.Context, wg *sync.WaitGroup) {
 					continue
 				}
 				for _, o := range orders {
-					orderNum := int(*o.Number)
+
 				retry:
-					or.logger.Infof("Send request to order number %d", orderNum)
+					or.logger.Infof("Send request to order number %d", o.Number)
 					res, err := or.client.R().
-						Get("http://" + or.accrualuri + "/api/orders/" + strconv.Itoa(orderNum))
+						Get("http://" + or.accrualuri + "/api/orders/" + o.Number)
 					if err != nil {
 						or.logger.Warnw("failed to get orders", "error", err)
 						continue
 					}
 					or.logger.Infof("Successfully request to order number %d."+
-						" Recieved status code %d", orderNum, res.StatusCode())
+						" Recieved status code %d", o.Number, res.StatusCode())
 
 					switch res.StatusCode() {
 					case http.StatusTooManyRequests:
@@ -86,8 +87,23 @@ func (or *OrderFetcher) Run(ctx context.Context, wg *sync.WaitGroup) {
 						}
 					case http.StatusOK:
 						{
-							or.logger.Infof("Successfully request to order number %d. Response: %v", orderNum, res.String())
-
+							or.logger.Infof("Successfully request to order number %d. Response: %v", o.Number, res.String())
+							d := res.Body()
+							accrual := &obj.Accrual{}
+							err = json.Unmarshal(d, accrual)
+							if err != nil {
+								or.logger.Warnw("failed to unmarshal withdraw accrual", "error", err)
+							}
+							//or.logger.Infof("Successfully request to order number %d. Response: %v", o.Number, res.String())
+							if accrual.Status == obj.AccrualStatusInvalid || accrual.Status == obj.AccrualStatusProcessed {
+								if err = or.storage.UpdateAccrual(ctx, o.UserID, accrual); err != nil {
+									or.logger.Warnw("failed to update after accrual", "error", err)
+								}
+							}
+						}
+					default:
+						{
+							or.logger.Warnw("failed to parse orders", "error", res.String())
 						}
 					}
 				}
@@ -96,19 +112,10 @@ func (or *OrderFetcher) Run(ctx context.Context, wg *sync.WaitGroup) {
 	}
 }
 
-func (or *OrderFetcher) Post(ctx context.Context, order *obj.Withdraw) error {
-	b, err := json.Marshal(order)
-	if err != nil {
-		return err
-	}
+func (or *OrderFetcher) handle(
+	accrual *obj.Accrual,
 
-	resp, err := or.client.R().
-		SetBody(b).
-		SetHeader("Content-Type", "application/json").
-		Post("http://" + or.accrualuri + "/api/orders")
-	if err != nil {
-		return err
-	}
-	or.logger.Infof("Order response status %s, resposne: %s", resp.Status(), resp.String())
+) error {
+
 	return nil
 }
