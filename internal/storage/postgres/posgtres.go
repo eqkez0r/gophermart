@@ -245,7 +245,7 @@ func (p *PostgreSQLStorage) GetUnfinishedOrders(ctx context.Context) ([]*obj.Ord
 }
 
 func (p *PostgreSQLStorage) GetBalance(ctx context.Context, login string) (*obj.AccrualBalance, error) {
-	balance := &obj.AccrualBalance{}
+
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -255,11 +255,8 @@ func (p *PostgreSQLStorage) GetBalance(ctx context.Context, login string) (*obj.
 	if err != nil {
 		return nil, err
 	}
-	row := p.pool.QueryRow(ctx, queryGetBalance, user.UserID)
-	if err = row.Scan(&user.Balance, &user.Withdraw); err != nil {
-		p.logger.Errorf("Database query account balance: %s. %v", user.UserID, err)
-		return nil, err
-	}
+
+	p.logger.Infof("Get account balance %v", user)
 	err = tx.Commit(ctx)
 	if err != nil {
 		return nil, err
@@ -272,7 +269,7 @@ func (p *PostgreSQLStorage) GetBalance(ctx context.Context, login string) (*obj.
 			}
 		}
 	}()
-	return balance, nil
+	return &user.AccrualBalance, nil
 }
 
 func (p *PostgreSQLStorage) NewWithdraw(ctx context.Context, login, number string, withdraw float64) error {
