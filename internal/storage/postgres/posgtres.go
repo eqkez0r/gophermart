@@ -48,10 +48,11 @@ const (
                    order_time,
                    order_status) VALUES ($1,$2,$3,$4)`
 
-	queryGetOrderList      = `SELECT * FROM orders WHERE order_customer = $1`
-	queryUpdateOrderStatus = `UPDATE orders SET order_status = $1, order_time = $2 WHERE order_number = $3`
+	queryGetOrderList = `SELECT * FROM orders WHERE order_customer = $1`
+	//add accrual here
+	queryUpdateOrderStatus = `UPDATE orders SET order_status = $1, order_time = $2, order_accrual = $3 WHERE order_number = $4`
 	queryGetNotFinished    = `SELECT order_customer, order_number FROM orders WHERE order_status = 'NEW' OR order_status = 'PROCESSING'`
-	queryGetOrder          = `SELECT order_customer, order_number FROM orders WHERE order_number = $1`
+	queryGetOrder          = `SELECT order_customer FROM orders WHERE order_number = $1`
 
 	queryNewWithdraw     = `INSERT INTO withdrawals(order_customer, order_number, accrual, withdraw_time) VALUES ($1, $2, $3, $4)`
 	queryGetWithdrawList = `SELECT * FROM withdrawals WHERE order_customer = $1`
@@ -70,7 +71,7 @@ func New(
 	const op = "Initial PostreSQL user storage error: "
 	pool, err := pgxpool.New(ctx, uri)
 	if err != nil {
-		return nil, err
+		return nil, e.Wrap(op, err)
 	}
 
 	err = retry.Retry(logger, 3, func() error {
@@ -80,7 +81,7 @@ func New(
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, e.Wrap(op, err)
 	}
 
 	err = retry.Retry(logger, 3, func() error {
@@ -88,15 +89,27 @@ func New(
 		return nil
 	})
 
+	if err != nil {
+		return nil, e.Wrap(op, err)
+	}
+
 	err = retry.Retry(logger, 3, func() error {
 		_, err = pool.Exec(ctx, queryCreateOrdersTable)
 		return nil
 	})
 
+	if err != nil {
+		return nil, e.Wrap(op, err)
+	}
+
 	err = retry.Retry(logger, 3, func() error {
 		_, err = pool.Exec(ctx, queryCreateWithdrawsTable)
 		return nil
 	})
+
+	if err != nil {
+		return nil, e.Wrap(op, err)
+	}
 
 	return &PostgreSQLStorage{
 		pool:   pool,
@@ -146,7 +159,7 @@ func (p *PostgreSQLStorage) IsUserExist(ctx context.Context, login string) (bool
 }
 
 func (p *PostgreSQLStorage) NewOrder(ctx context.Context, login, number string) error {
-
+	p.logger.Infof("called NewOrder, number: %v, login: %s", number, login)
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -158,13 +171,16 @@ func (p *PostgreSQLStorage) NewOrder(ctx context.Context, login, number string) 
 	}
 
 	var userid uint64
-	var num string
 	row := p.pool.QueryRow(ctx, queryGetOrder, number)
-	err = row.Scan(&userid, &num)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) && user.UserID != userid {
+	err = row.Scan(&userid)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		p.logger.Errorf("Scan order for check duplicate: %s. %v", login, err)
+		return err
+	}
+	if userid != user.UserID && userid != 0 {
+		p.logger.Errorf("Scan order for check duplicate: %s. %v", login, err)
 		return e.ErrIsOrderExistWithAnotherCustomer
 	}
-
 	t := time.Now().Format(time.RFC3339)
 	_, err = p.pool.Exec(ctx, queryNewOrder, number, user.UserID, t, obj.OrderStatusNew)
 	if err != nil {
@@ -334,13 +350,13 @@ func (p *PostgreSQLStorage) UpdateAccrual(ctx context.Context, userid uint64, ac
 	t := time.Now().Format(time.RFC3339)
 	p.logger.Infof("Update accrual: %d, %v", userid, *accrual)
 	_, err = p.pool.Exec(ctx, queryUpdateOrderStatus,
-		obj.AccrualStatusToOrderStatus[accrual.Status], t, accrual.Order)
+		obj.AccrualStatusToOrderStatus[accrual.Status], t, accrual.Accrual, accrual.Order)
 	if err != nil {
 		p.logger.Errorf("Database exec update order status: %s.", err)
 		return err
 	}
 
-	if accrual.Status == obj.AccrualStatusProcessed && accrual.Accrual != 0 {
+	if accrual.Status == obj.AccrualStatusProcessed {
 		p.logger.Infof("Update accrual status: %s.", accrual.Order)
 		_, err = p.pool.Exec(ctx, queryUpdateAccrualBalance,
 			accrual.Accrual, userid)

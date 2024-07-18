@@ -12,11 +12,6 @@ import (
 	"time"
 )
 
-// pool order
-// 429
-// time.sleep
-// try again this order
-
 type OrdersProvider interface {
 	GetUnfinishedOrders(ctx context.Context) ([]*obj.Order, error)
 	UpdateAccrual(context.Context, uint64, *obj.Accrual) error
@@ -105,8 +100,8 @@ func (or *OrderFetcher) Run(ctx context.Context, wg *sync.WaitGroup) {
 						}
 					}
 				}
-				or.logger.Info("order fetcher delay")
-				time.Sleep(2 * time.Second)
+				//or.logger.Info("order fetcher delay")
+				//time.Sleep(5 * time.Second)
 			}
 		}
 	}

@@ -41,11 +41,13 @@ func WithdrawalsHandler(
 			c.Status(http.StatusInternalServerError)
 			return
 		}
+
 		if len(withdrawals) == 0 {
 			logger.Infof("No Withdrawals for user %s", login)
 			c.Status(http.StatusNoContent)
 			return
 		}
+
 		c.JSON(http.StatusOK, withdrawals)
 	}
 }

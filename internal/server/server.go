@@ -18,6 +18,7 @@ type HTTPServer struct {
 	engine *gin.Engine
 	cfg    *config.Config
 	logger *zap.SugaredLogger
+	s      storage.Storage
 }
 
 const (
@@ -32,7 +33,7 @@ func New(
 	s storage.Storage,
 	of *orderfetcher.OrderFetcher,
 ) (*HTTPServer, error) {
-	const op = "Initial server error"
+	//const op = "Initial server error"
 
 	gin.DisableConsoleColor()
 	gin.SetMode(gin.ReleaseMode)
@@ -80,13 +81,16 @@ func (s *HTTPServer) Run(ctx context.Context) {
 	}()
 
 	<-ctx.Done()
-	s.GracefulShutdown(ctx)
+
 }
 
 func (s *HTTPServer) GracefulShutdown(ctx context.Context) {
 	const op = "Graceful shutdown error: "
 	s.logger.Info("Server was stopped.")
 	if err := s.server.Shutdown(ctx); err != nil {
+		s.logger.Error(e.Wrap(op, err))
+	}
+	if err := s.s.GracefulShutdown(); err != nil {
 		s.logger.Error(e.Wrap(op, err))
 	}
 }
