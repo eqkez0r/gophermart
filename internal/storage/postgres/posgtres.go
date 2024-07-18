@@ -41,7 +41,7 @@ const (
 	queryGetLastUserID        = "SELECT user_id FROM users ORDER BY user_id DESC LIMIT 1"
 	queryGetBalance           = `SELECT ROUND(accrual_balance, 2), ROUND(withdrawal_balance, 2) FROM users WHERE user_id = $1`
 	queryUpdateBalance        = `UPDATE users SET accrual_balance = $1, withdrawal_balance = $2 WHERE user_id = $3`
-	queryUpdateAccrualBalance = `UPDATE users SET accrual_balance = users.accrual_balance + $1 WHERE user_id = $2`
+	queryUpdateAccrualBalance = `UPDATE users SET accrual_balance = accrual_balance + $1 WHERE user_id = $2`
 
 	queryNewOrder = `INSERT INTO orders(order_number,
                    order_customer,
@@ -49,7 +49,7 @@ const (
                    order_status) VALUES ($1,$2,$3,$4)`
 
 	queryGetOrderList      = `SELECT * FROM orders WHERE order_customer = $1`
-	queryUpdateOrderStatus = `UPDATE orders SET order_status = $1 WHERE order_number = $2`
+	queryUpdateOrderStatus = `UPDATE orders SET order_status = $1, order_time = $2 WHERE order_number = $3`
 	queryGetNotFinished    = `SELECT order_customer, order_number FROM orders WHERE order_status = 'NEW' OR order_status = 'PROCESSING'`
 	queryGetOrder          = `SELECT order_customer, order_number FROM orders WHERE order_number = $1`
 
@@ -245,30 +245,11 @@ func (p *PostgreSQLStorage) GetUnfinishedOrders(ctx context.Context) ([]*obj.Ord
 }
 
 func (p *PostgreSQLStorage) GetBalance(ctx context.Context, login string) (*obj.AccrualBalance, error) {
-
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	user, err := p.GetUser(ctx, login)
 	if err != nil {
 		return nil, err
 	}
-
 	p.logger.Infof("Get account balance %v", user)
-	err = tx.Commit(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err != nil {
-			err = tx.Rollback(ctx)
-			if err != nil {
-				p.logger.Errorf("Database rollback: %s.", err)
-			}
-		}
-	}()
 	return &user.AccrualBalance, nil
 }
 
@@ -345,21 +326,24 @@ func (p *PostgreSQLStorage) Withdrawals(ctx context.Context, login string) ([]*o
 	return withdrawals, nil
 }
 
-// TODO: UPD TIME
 func (p *PostgreSQLStorage) UpdateAccrual(ctx context.Context, userid uint64, accrual *obj.Accrual) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-
-	_, err = p.pool.Exec(ctx, queryUpdateOrderStatus, obj.AccrualStatusToOrderStatus[accrual.Status], accrual.Order)
+	t := time.Now().Format(time.RFC3339)
+	p.logger.Infof("Update accrual: %d, %v", userid, *accrual)
+	_, err = p.pool.Exec(ctx, queryUpdateOrderStatus,
+		obj.AccrualStatusToOrderStatus[accrual.Status], t, accrual.Order)
 	if err != nil {
 		p.logger.Errorf("Database exec update order status: %s.", err)
 		return err
 	}
 
-	if accrual.Status == obj.AccrualStatusProcessed && accrual.Accrual != nil {
-		_, err = p.pool.Exec(ctx, queryUpdateAccrualBalance, accrual.Accrual, userid)
+	if accrual.Status == obj.AccrualStatusProcessed && accrual.Accrual != 0 {
+		p.logger.Infof("Update accrual status: %s.", accrual.Order)
+		_, err = p.pool.Exec(ctx, queryUpdateAccrualBalance,
+			accrual.Accrual, userid)
 		if err != nil {
 			p.logger.Errorf("Database exec update accrual balance: %s.", userid)
 			return err

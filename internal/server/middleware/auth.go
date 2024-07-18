@@ -33,7 +33,7 @@ func Auth(
 		login, ttl, err := jwt.JWTPayload(token)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
-			c.Status(http.StatusInternalServerError)
+			c.Status(http.StatusUnauthorized)
 			c.Abort()
 			return
 		}
