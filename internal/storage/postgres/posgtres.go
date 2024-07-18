@@ -17,28 +17,29 @@ const (
     user_id SERIAL PRIMARY KEY,
     login VARCHAR(50) UNIQUE NOT NULL ,
     password VARCHAR(128) NOT NULL,
-    accrual_balance DOUBLE PRECISION NOT NULL,
-    withdrawal_balance DOUBLE PRECISION NOT NULL    
+    accrual_balance NUMERIC NOT NULL,
+    withdrawal_balance NUMERIC NOT NULL    
 )`
 	queryCreateOrdersTable = `
 	CREATE TABLE orders(
 		order_number VARCHAR(20) UNIQUE NOT NULL, 
 		order_customer INTEGER REFERENCES users(user_id) ON DELETE CASCADE NOT NULL, 
-		order_accrual DOUBLE PRECISION,
+		order_accrual NUMERIC,
 		order_time TIMESTAMP WITH TIME ZONE NOT NULL,
 		order_status VARCHAR(10) NOT NULL 
 	)`
-	queryCreateWithdrawsTable = `CREATE TABLE withdraws(
+	queryCreateWithdrawsTable = `CREATE TABLE withdrawals(
+    	withdraw_id serial primary key,	
     	order_customer INTEGER REFERENCES users(user_id) ON DELETE CASCADE NOT NULL,
-    	order_number VARCHAR(20) REFERENCES orders(order_number) UNIQUE NOT NULL,
-    	accrual DOUBLE PRECISION NOT NULL,
+    	order_number VARCHAR(20) UNIQUE,
+    	accrual NUMERIC NOT NULL,
     	withdraw_time TIMESTAMP WITH TIME ZONE NOT NULL
 )`
 	queryNewUser              = `INSERT INTO users(login, password, accrual_balance, withdrawal_balance) VALUES ($1, $2, 0, 0)`
 	queryGetUser              = `SELECT * FROM users WHERE login = $1`
 	queryGetOnlyLogin         = `SELECT login FROM users WHERE login = $1`
 	queryGetLastUserID        = "SELECT user_id FROM users ORDER BY user_id DESC LIMIT 1"
-	queryGetBalance           = `SELECT accrual_balance, withdrawal_balance FROM users WHERE user_id = $1`
+	queryGetBalance           = `SELECT ROUND(accrual_balance, 2), ROUND(withdrawal_balance, 2) FROM users WHERE user_id = $1`
 	queryUpdateBalance        = `UPDATE users SET accrual_balance = $1, withdrawal_balance = $2 WHERE user_id = $3`
 	queryUpdateAccrualBalance = `UPDATE users SET accrual_balance = users.accrual_balance + $1 WHERE user_id = $2`
 
@@ -52,7 +53,7 @@ const (
 	queryGetNotFinished    = `SELECT order_customer, order_number FROM orders WHERE order_status = 'NEW' OR order_status = 'PROCESSING'`
 	queryGetOrder          = `SELECT order_customer, order_number FROM orders WHERE order_number = $1`
 
-	queryNewWithdraw     = `INSERT INTO withdrawals(order_customer, order_number, sum, withdraw_time) VALUES ($1, $2, $3, $4)`
+	queryNewWithdraw     = `INSERT INTO withdrawals(order_customer, order_number, accrual, withdraw_time) VALUES ($1, $2, $3, $4)`
 	queryGetWithdrawList = `SELECT * FROM withdrawals WHERE order_customer = $1`
 )
 
@@ -283,14 +284,6 @@ func (p *PostgreSQLStorage) NewWithdraw(ctx context.Context, login, number strin
 	if err != nil {
 		return err
 	}
-	order := &obj.Order{}
-	err = p.pool.QueryRow(ctx, queryGetOrder, number).Scan(&order)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return e.ErrIsOrderIsNotExist
-		}
-		return err
-	}
 
 	if user.Balance < withdraw {
 		p.logger.Errorf("Not enough balance for user: %s.", user.UserID)
@@ -305,12 +298,12 @@ func (p *PostgreSQLStorage) NewWithdraw(ctx context.Context, login, number strin
 		user.UserID, user.Balance, user.Withdraw)
 
 	if _, err = p.pool.Exec(ctx, queryNewWithdraw,
-		user.UserID, user.Balance, user.Withdraw, time.Now().Format(time.RFC3339)); err != nil {
+		user.UserID, number, withdraw, time.Now().Format(time.RFC3339)); err != nil {
 		p.logger.Errorf("Database exec new withdraw: %s.", user.UserID)
 		return err
 	}
 
-	if _, err = p.pool.Exec(ctx, queryUpdateBalance, user.Balance, user.Withdraw); err != nil {
+	if _, err = p.pool.Exec(ctx, queryUpdateBalance, user.Balance, user.Withdraw, user.UserID); err != nil {
 		p.logger.Errorf("Database exec change account balance: %s.", err)
 		return err
 	}
@@ -333,15 +326,19 @@ func (p *PostgreSQLStorage) NewWithdraw(ctx context.Context, login, number strin
 }
 
 func (p *PostgreSQLStorage) Withdrawals(ctx context.Context, login string) ([]*obj.Withdraw, error) {
+	user, err := p.GetUser(ctx, login)
+	if err != nil {
+		return nil, err
+	}
 	withdrawals := make([]*obj.Withdraw, 0)
-	rows, err := p.pool.Query(ctx, queryGetNotFinished)
+	rows, err := p.pool.Query(ctx, queryGetWithdrawList, user.UserID)
 	if err != nil {
 		p.logger.Errorf("Database query orders: %s.", err)
 		return nil, err
 	}
 	for rows.Next() {
 		withdraw := &obj.Withdraw{}
-		err = rows.Scan(&withdraw.Order, &withdraw.Sum, &withdraw.ProcessedAt)
+		err = rows.Scan(&withdraw.WithdrawID, &withdraw.WithdrawID, &withdraw.Order, &withdraw.Sum, &withdraw.ProcessedAt)
 		if err != nil {
 			p.logger.Errorf("Database scan orders: %s.", err)
 			return nil, err
