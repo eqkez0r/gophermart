@@ -1,6 +1,6 @@
 package objects
 
 type AccrualBalance struct {
-	Balance  float64 `json:"current"`
-	Withdraw float64 `json:"withdraw"`
+	Balance  float32 `json:"current"`
+	Withdraw float32 `json:"withdraw"`
 }

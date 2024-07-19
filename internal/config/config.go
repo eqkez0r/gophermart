@@ -15,7 +15,7 @@ type Config struct {
 
 const (
 	defaultRunAddr           = "127.0.0.1:8880"
-	defaultAccrualSystemAddr = "127.0.0.1:8080"
+	defaultAccrualSystemAddr = "http://127.0.0.1:8080"
 )
 
 var (

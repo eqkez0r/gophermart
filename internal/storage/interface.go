@@ -14,7 +14,7 @@ type Storage interface {
 	GetOrdersList(context.Context, string) ([]*obj.Order, error)
 	GetUnfinishedOrders(context.Context) ([]*obj.Order, error)
 	GetBalance(context.Context, string) (*obj.AccrualBalance, error)
-	NewWithdraw(context.Context, string, string, float64) error
+	NewWithdraw(context.Context, string, string, float32) error
 	Withdrawals(context.Context, string) ([]*obj.Withdraw, error)
 	UpdateAccrual(context.Context, uint64, *obj.Accrual) error
 	GracefulShutdown() error

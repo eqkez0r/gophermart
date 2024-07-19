@@ -55,19 +55,19 @@ func (or *OrderFetcher) Run(ctx context.Context, wg *sync.WaitGroup) {
 					or.logger.Warnw("failed to get unfinished orders", "error", err)
 					continue
 				}
-				or.logger.Debugf("unfinshed orders %+v", orders)
+				//or.logger.Debugf("unfinshed orders %+v", orders)
 				for _, o := range orders {
 				retry:
 					url := or.accrualuri + "/api/orders/" + o.Number
-					or.logger.Debugf("Send request to order number %s", url)
+					//or.logger.Debugf("Send request to order number %s", url)
 
 					res, err := or.client.R().Get(url)
 					if err != nil {
 						or.logger.Warnw("failed to get orders", "error", err)
 						continue
 					}
-					or.logger.Infof("Successfully request to order number %d. \n"+
-						" Recieved status code %d", o.Number, res.StatusCode())
+					//or.logger.Infof("Successfully request to order number %d. \n"+
+					//	" Recieved status code %d", o.Number, res.StatusCode())
 
 					switch res.StatusCode() {
 					case http.StatusTooManyRequests:

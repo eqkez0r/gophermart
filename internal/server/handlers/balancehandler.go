@@ -27,7 +27,7 @@ func BalanceHandler(
 		const op = "Balance handler error: "
 
 		token := c.Request.Header.Get("Authorization")
-
+		logger.Infof("call balance. token %s", token)
 		login, _, err := jwt.JWTPayload(token)
 		if err != nil {
 			logger.Error(e.Wrap(op, err))
@@ -42,6 +42,7 @@ func BalanceHandler(
 			return
 		}
 
+		logger.Infof("getting balance: %v", balance)
 		c.JSON(http.StatusOK, balance)
 	}
 }

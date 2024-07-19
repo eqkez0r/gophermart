@@ -20,7 +20,7 @@ const (
 )
 
 type WithdrawHandlerProvider interface {
-	NewWithdraw(context.Context, string, string, float64) error
+	NewWithdraw(context.Context, string, string, float32) error
 }
 
 func WithdrawHandler(

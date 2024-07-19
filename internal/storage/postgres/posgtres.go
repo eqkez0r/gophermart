@@ -35,13 +35,13 @@ const (
     	accrual NUMERIC NOT NULL,
     	withdraw_time TIMESTAMP WITH TIME ZONE NOT NULL
 )`
-	queryNewUser              = `INSERT INTO users(login, password, accrual_balance, withdrawal_balance) VALUES ($1, $2, 0, 0)`
-	queryGetUser              = `SELECT * FROM users WHERE login = $1`
-	queryGetOnlyLogin         = `SELECT login FROM users WHERE login = $1`
-	queryGetLastUserID        = "SELECT user_id FROM users ORDER BY user_id DESC LIMIT 1"
-	queryGetBalance           = `SELECT ROUND(accrual_balance, 2), ROUND(withdrawal_balance, 2) FROM users WHERE user_id = $1`
-	queryUpdateBalance        = `UPDATE users SET accrual_balance = $1, withdrawal_balance = $2 WHERE user_id = $3`
-	queryUpdateAccrualBalance = `UPDATE users SET accrual_balance = accrual_balance + $1 WHERE user_id = $2`
+	queryNewUser                    = `INSERT INTO users(login, password, accrual_balance, withdrawal_balance) VALUES ($1, $2, 0, 0)`
+	queryGetUser                    = `SELECT * FROM users WHERE login = $1`
+	queryGetOnlyLogin               = `SELECT login FROM users WHERE login = $1`
+	queryGetLastUserID              = `SELECT user_id FROM users ORDER BY user_id DESC LIMIT 1`
+	queryGetBalance                 = `SELECT accrual_balance, withdrawal_balance FROM users WHERE login = $1`
+	queryUpdateAccrualBalance       = `UPDATE users SET accrual_balance = accrual_balance + $1 WHERE user_id = $2`
+	queryUpdateBalanceAfterWithdraw = `UPDATE users SET accrual_balance = accrual_balance - $1, withdrawal_balance = withdrawal_balance + $1 WHERE user_id = $2`
 
 	queryNewOrder = `INSERT INTO orders(order_number,
                    order_customer,
@@ -261,15 +261,16 @@ func (p *PostgreSQLStorage) GetUnfinishedOrders(ctx context.Context) ([]*obj.Ord
 }
 
 func (p *PostgreSQLStorage) GetBalance(ctx context.Context, login string) (*obj.AccrualBalance, error) {
-	user, err := p.GetUser(ctx, login)
-	if err != nil {
+	accrualbalance := &obj.AccrualBalance{}
+	row := p.pool.QueryRow(ctx, queryGetBalance, login)
+	if err := row.Scan(&accrualbalance.Balance, &accrualbalance.Withdraw); err != nil {
 		return nil, err
 	}
-	p.logger.Infof("Get account balance %v", user)
-	return &user.AccrualBalance, nil
+	p.logger.Infof("parsed accrual balance: %v", accrualbalance)
+	return accrualbalance, nil
 }
 
-func (p *PostgreSQLStorage) NewWithdraw(ctx context.Context, login, number string, withdraw float64) error {
+func (p *PostgreSQLStorage) NewWithdraw(ctx context.Context, login, number string, withdraw float32) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -284,24 +285,24 @@ func (p *PostgreSQLStorage) NewWithdraw(ctx context.Context, login, number strin
 		return e.ErrBalanceIsNotEnough
 	}
 
-	p.logger.Infof("Withdrawing user: %s. Before balance: %d, NewWithdraw: %d.",
-		user.UserID, user.Balance, user.Withdraw)
-	user.Balance -= withdraw
-	user.Withdraw += withdraw
-	p.logger.Infof("Withdrawing user: %s. After balance: %d, NewWithdraw: %d.",
-		user.UserID, user.Balance, user.Withdraw)
-
-	if _, err = p.pool.Exec(ctx, queryNewWithdraw,
-		user.UserID, number, withdraw, time.Now().Format(time.RFC3339)); err != nil {
-		p.logger.Errorf("Database exec new withdraw: %s.", user.UserID)
-		return err
-	}
-
-	if _, err = p.pool.Exec(ctx, queryUpdateBalance, user.Balance, user.Withdraw, user.UserID); err != nil {
+	p.logger.Infof("update account balance %d, %f, %f", user.UserID, user.Balance, user.Withdraw)
+	if _, err = p.pool.Exec(ctx, queryUpdateBalanceAfterWithdraw, withdraw, user.UserID); err != nil {
 		p.logger.Errorf("Database exec change account balance: %s.", err)
 		return err
 	}
 
+	t := time.Now().Format(time.RFC3339)
+	if _, err = p.pool.Exec(ctx, queryNewWithdraw,
+		user.UserID, number, withdraw, t); err != nil {
+		p.logger.Errorf("Database exec new withdraw: %s.", user.UserID)
+		return err
+	}
+
+	userAfter, err := p.GetUser(ctx, login)
+	if err != nil {
+		return err
+	}
+	p.logger.Infof("before user data %v, after user data %v", userAfter, userAfter)
 	err = tx.Commit(ctx)
 	if err != nil {
 		p.logger.Errorf("Database commit transaction: %s.", err)
