@@ -39,7 +39,7 @@ func New(
 }
 
 func (or *OrderFetcher) Run(ctx context.Context, wg *sync.WaitGroup) {
-
+	or.logger.Infof("Fetching orders from %s", or.accrualuri)
 	for {
 		select {
 		case <-ctx.Done():
@@ -55,16 +55,18 @@ func (or *OrderFetcher) Run(ctx context.Context, wg *sync.WaitGroup) {
 					or.logger.Warnw("failed to get unfinished orders", "error", err)
 					continue
 				}
+				or.logger.Debugf("unfinshed orders %+v", orders)
 				for _, o := range orders {
 				retry:
-					or.logger.Infof("Send request to order number %d", o.Number)
-					res, err := or.client.R().
-						Get("http://" + or.accrualuri + "/api/orders/" + o.Number)
+					url := or.accrualuri + "/api/orders/" + o.Number
+					or.logger.Debugf("Send request to order number %s", url)
+
+					res, err := or.client.R().Get(url)
 					if err != nil {
 						or.logger.Warnw("failed to get orders", "error", err)
 						continue
 					}
-					or.logger.Infof("Successfully request to order number %d."+
+					or.logger.Infof("Successfully request to order number %d. \n"+
 						" Recieved status code %d", o.Number, res.StatusCode())
 
 					switch res.StatusCode() {
@@ -80,19 +82,25 @@ func (or *OrderFetcher) Run(ctx context.Context, wg *sync.WaitGroup) {
 						}
 					case http.StatusOK:
 						{
-							or.logger.Infof("Successfully request to order number %d. Response: %v", o.Number, res.String())
 							d := res.Body()
 							accrual := &obj.Accrual{}
 							err = json.Unmarshal(d, accrual)
 							if err != nil {
 								or.logger.Warnw("failed to unmarshal withdraw accrual", "error", err)
 							}
-							//or.logger.Infof("Successfully request to order number %d. Response: %v", o.Number, res.String())
 							if accrual.Status == obj.AccrualStatusInvalid || accrual.Status == obj.AccrualStatusProcessed {
 								if err = or.storage.UpdateAccrual(ctx, o.UserID, accrual); err != nil {
 									or.logger.Warnw("failed to update after accrual", "error", err)
 								}
 							}
+						}
+					case http.StatusInternalServerError:
+						{
+							or.logger.Infof("internal server error on order number $s", o.Number)
+						}
+					case http.StatusNoContent:
+						{
+							or.logger.Infof("Order number %s has status code no content", o.Number)
 						}
 					default:
 						{

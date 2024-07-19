@@ -34,10 +34,10 @@ test:
 	./gophermarttest \
             -test.v -test.run=^TestGophermart$ \
             -gophermart-binary-path=cmd/gophermart/gophermart \
-            -gophermart-host=localhost \
+            -gophermart-host=127.0.0.1 \
             -gophermart-port=8880 \
             -gophermart-database-uri="postgresql://postgres:postgres@127.0.0.1:5432/gophermart?sslmode=disable" \
             -accrual-binary-path=cmd/accrual/accrual_linux_amd64 \
-            -accrual-host=localhost \
+            -accrual-host=127.0.0.1 \
             -accrual-port=8080 \
             -accrual-database-uri="postgresql://postgres:postgres@127.0.0.1:5432/gophermart?sslmode=disable"
