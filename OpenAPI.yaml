@@ -1,0 +1,40 @@
+openapi: 3.0.3
+info:
+  title: Gophermart
+  description: Gophermart - is app to calculated your bonus and getting status order
+  version: 1.0.0
+servers:
+  - url: 'https://127.0.0.1'
+paths:
+  /api/user/register:
+    post:
+      summary: Register new user
+      operationId: postUser
+      description: Register new user with pass
+      parameters:
+        - $ref: '#/components/parameters/login'
+        - $ref: '#/components/parameters/password'
+      responses:
+        '200':
+          description: Successful
+        '400':
+          description: Invalid request format
+        '409':
+          description: Current login is exist
+        '500':
+          description: Internal server error
+
+
+
+components:
+  parameters:
+    login:
+      name: User login
+      schema:
+        type: string
+    password:
+      name: User password
+      schema:
+        type: string
+
+
