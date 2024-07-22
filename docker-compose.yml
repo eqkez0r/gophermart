@@ -19,11 +19,23 @@ services:
 
   gophermart_service:
     image: gophermart:runner
+    restart: always
     container_name: gophermart_service
     ports:
       - "8888:8888"
     depends_on:
       - postgresql
+    networks:
+      - ns
+
+  acrrual:
+    image: gophermart:accrual
+    container_name: accrual_service
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgresql
+      - gophermart_service
     networks:
       - ns
 

@@ -24,3 +24,5 @@ vendor/
 
 golangci-lint
 data
+
+gophermarttest
