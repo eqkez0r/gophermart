@@ -1,20 +1,44 @@
 services:
 
-
   postgresql:
     image: postgres:16-alpine
+    restart: always
     container_name: gophermart-psql
     environment:
       - POSTGRES_DB=gophermart
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
+      - PGDATA=/var/lib/postgresql/data
     ports:
-      - "127.0.0.1:5555:5555"
+      - "127.0.0.1:5432:5432"
     volumes:
       - ./data:/var/lib/postgresql/data
     networks:
-      -gophermart_nw
+      - ns
 
+
+  gophermart_service:
+    image: gophermart:runner
+    restart: always
+    container_name: gophermart_service
+    ports:
+      - "8888:8888"
+    depends_on:
+      - postgresql
+    networks:
+      - ns
+
+  acrrual:
+    image: gophermart:accrual
+    container_name: accrual_service
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgresql
+      - gophermart_service
+    networks:
+      - ns
 
 networks:
-  gophermart_nw:
+  ns:
+#    - driver: bridge
